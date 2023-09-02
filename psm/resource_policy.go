@@ -29,7 +29,7 @@ func resourcePolicy() *schema.Resource {
 				Default:  "default",
 				ForceNew: true,
 			},
-			"policy_distribution_target": {
+			"pdt": {
 				Type:     schema.TypeString,
 				Optional: true,
 				Default:  "default",
@@ -67,7 +67,7 @@ func resourcePolicyCreate(ctx context.Context, d *schema.ResourceData, m interfa
 	policy := &Policy{}
 	policy.Meta.Name = d.Get("name").(string)
 	policy.Meta.Tenant = d.Get("tenant").(string)
-	policy.Spec.PolicyDistributionTargets = []string{d.Get("policy_distribution_target").(string)}
+	policy.Spec.PolicyDistributionTargets = []string{d.Get("pdt").(string)}
 
 	jsonBytes, err := json.Marshal(policy)
 	if err != nil {
@@ -133,9 +133,9 @@ func resourcePolicyRead(ctx context.Context, d *schema.ResourceData, m interface
 
 	d.Set("name", policy.Meta.Name)
 	d.Set("tenant", policy.Meta.Tenant)
-	d.Set("policy_distribution_target", policy.Spec.PolicyDistributionTargets)
+	d.Set("pdt", policy.Spec.PolicyDistributionTargets)
 	if len(policy.Spec.PolicyDistributionTargets) > 0 {
-		d.Set("policy_distribution_target", policy.Spec.PolicyDistributionTargets[0])
+		d.Set("pdt", policy.Spec.PolicyDistributionTargets[0])
 	}
 
 	return nil
