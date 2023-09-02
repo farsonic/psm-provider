@@ -1,9 +1,9 @@
 TEST?=$$(go list ./... | grep -v 'vendor')
 HOSTNAME=local
-NAMESPACE=farsonic
+NAMESPACE=provider
 NAME=psm
 BINARY=terraform-provider-${NAME}
-VERSION=0.0.79
+VERSION=0.1.0
 OS_ARCH=linux_amd64
 OS=linux
 
