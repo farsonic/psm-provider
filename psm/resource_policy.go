@@ -133,6 +133,7 @@ func resourcePolicyRead(ctx context.Context, d *schema.ResourceData, m interface
 
 	d.Set("name", policy.Meta.Name)
 	d.Set("tenant", policy.Meta.Tenant)
+	d.Set("policy_distribution_target", policy.Meta.PolicyDistributionTargets)
 	if len(policy.Spec.PolicyDistributionTargets) > 0 {
 		d.Set("policy_distribution_target", policy.Spec.PolicyDistributionTargets[0])
 	}
