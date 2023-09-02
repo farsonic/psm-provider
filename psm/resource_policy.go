@@ -26,7 +26,7 @@ func resourcePolicy() *schema.Resource {
 			"tenant": {
 				Type:     schema.TypeString,
 				Optional: true,
-				//Default:  "default",
+				Default:  "default",
 				ForceNew: true,
 			},
 			"pdt": {
