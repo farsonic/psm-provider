@@ -274,7 +274,7 @@ func resourceRulesCreate(ctx context.Context, d *schema.ResourceData, m interfac
 	d.SetId(responsePolicy.Meta.UUID)
 
 	log.Println("Fetching rules from server...")
-	return resourceRuleRead(ctx, d, m)
+	return resourceRulesRead(ctx, d, m)
 }
 
 func resourceRulesRead(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
