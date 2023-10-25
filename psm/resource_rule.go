@@ -52,6 +52,18 @@ func resourceRule() *schema.Resource {
 				Required: true,
 				ForceNew: true,
 			},
+			"from_ip_collections": {
+				Type:     schema.TypeList,
+				Elem:     &schema.Schema{Type: schema.TypeString},
+				Required: true,
+				ForceNew: true,
+			},
+			"to_ip_collections": {
+				Type:     schema.TypeList,
+				Elem:     &schema.Schema{Type: schema.TypeString},
+				Required: true,
+				ForceNew: true,
+			},
 			"from_ip_address": {
 				Type:     schema.TypeList,
 				Elem:     &schema.Schema{Type: schema.TypeString},
@@ -81,13 +93,15 @@ func resourceRule() *schema.Resource {
 }
 
 type RuleDetail struct {
-	Apps            []string    `json:"apps"`
-	Action          string      `json:"action"`
-	FromIPAddresses []string    `json:"from-ip-addresses"`
-	ToIPAddresses   []string    `json:"to-ip-addresses"`
-	Description     string      `json:"description"`
-	Name            string      `json:"name"`
-	Disable         interface{} `json:"disable"`
+	Apps              []string    `json:"apps"`
+	Action            string      `json:"action"`
+	FromIPCollections []string    `json:"from-ipcollections,omitempty"`
+	ToIPCollections   []string    `json:"to-ipcollections,omitempty"`
+	FromIPAddresses   []string    `json:"from-ip-addresses"`
+	ToIPAddresses     []string    `json:"to-ip-addresses"`
+	Description       string      `json:"description"`
+	Name              string      `json:"name"`
+	Disable           interface{} `json:"disable"`
 }
 
 type PolicyRule struct {
@@ -157,6 +171,8 @@ func resourceRuleCreate(ctx context.Context, d *schema.ResourceData, m interface
 	appStrings := convertToStringSlice(d.Get("apps").([]interface{}))
 	fromIPStrings := convertToStringSlice(d.Get("from_ip_address").([]interface{}))
 	toIPStrings := convertToStringSlice(d.Get("to_ip_address").([]interface{}))
+	fromIPCollections := convertToStringSlice(d.Get("from_ip_collections").([]interface{}))
+	toIPCollections := convertToStringSlice(d.Get("to_ip_collections").([]interface{}))
 
 	// Fetch the existing policy using the resourcePolicyRead function
 	if diags := resourcePolicyRead(ctx, d, m); diags.HasError() {
@@ -185,12 +201,14 @@ func resourceRuleCreate(ctx context.Context, d *schema.ResourceData, m interface
 
 	// Append the new rule to the currentPolicy
 	currentPolicy.Spec.Rules = append(currentPolicy.Spec.Rules, RuleDetail{
-		Name:            d.Get("rule_name").(string),
-		Description:     d.Get("description").(string),
-		FromIPAddresses: fromIPStrings,
-		ToIPAddresses:   toIPStrings,
-		Apps:            appStrings,
-		Action:          d.Get("action").(string),
+		Name:              d.Get("rule_name").(string),
+		Description:       d.Get("description").(string),
+		FromIPAddresses:   fromIPStrings,
+		ToIPAddresses:     toIPStrings,
+		FromIPCollections: fromIPCollections,
+		ToIPCollections:   toIPCollections,
+		Apps:              appStrings,
+		Action:            d.Get("action").(string),
 		// If you use the "disable" field, extract it from d and set it here
 	})
 
