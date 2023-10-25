@@ -68,7 +68,7 @@ func resourceIPCollectionCreate(ctx context.Context, d *schema.ResourceData, m i
 	// Log the JSON being sent in the request
 	log.Printf("[DEBUG] Sending IPCollection JSON to the server: %s", string(jsonBytes))
 
-	req, err := http.NewRequestWithContext(ctx, "POST", config.Server+"/configs/network/v1/tenant/default/ipcollections/", bytes.NewBuffer(jsonBytes))
+	req, err := http.NewRequestWithContext(ctx, "POST", config.Server+"/configs/network/v1/tenant/default/ipcollections", bytes.NewBuffer(jsonBytes))
 	if err != nil {
 		return diag.FromErr(err)
 	}
