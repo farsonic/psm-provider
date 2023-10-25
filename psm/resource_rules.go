@@ -287,6 +287,8 @@ func resourceRulesRead(ctx context.Context, d *schema.ResourceData, m interface{
 	}
 
 	url := config.Server + "/configs/security/v1/tenant/default/networksecuritypolicies/" + policyName.(string)
+	log.Println(policyName)
+	log.Println(url)
 
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
