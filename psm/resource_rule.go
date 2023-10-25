@@ -19,7 +19,7 @@ func resourceRule() *schema.Resource {
 		ReadContext:   resourceRuleRead,
 		DeleteContext: resourceRuleDelete,
 		Schema: map[string]*schema.Schema{
-			"policy": {
+			"name": {
 				Type:     schema.TypeString,
 				Required: true,
 				ForceNew: true,
@@ -174,13 +174,6 @@ func resourceRuleCreate(ctx context.Context, d *schema.ResourceData, m interface
 	fromIPCollections := convertToStringSlice(d.Get("from_ip_collections").([]interface{}))
 	toIPCollections := convertToStringSlice(d.Get("to_ip_collections").([]interface{}))
 
-	// Debug: print converted slices
-	log.Printf("[DEBUG] Converted appStrings: %v", appStrings)
-	log.Printf("[DEBUG] Converted fromIPStrings: %v", fromIPStrings)
-	log.Printf("[DEBUG] Converted toIPStrings: %v", toIPStrings)
-	log.Printf("[DEBUG] Converted fromIPCollections: %v", fromIPCollections)
-	log.Printf("[DEBUG] Converted toIPCollections: %v", toIPCollections)
-
 	// Fetch the existing policy using the resourcePolicyRead function
 	if diags := resourcePolicyRead(ctx, d, m); diags.HasError() {
 		return diags
@@ -190,7 +183,7 @@ func resourceRuleCreate(ctx context.Context, d *schema.ResourceData, m interface
 	currentPolicy := &PolicyRule{}
 	if v, ok := d.GetOk("meta"); ok {
 		metaMap := v.(map[string]interface{})
-		currentPolicy.Meta.Name = metaMap["policy"].(string)
+		currentPolicy.Meta.Name = metaMap["name"].(string)
 		// Extract other meta fields if needed
 	}
 	currentPolicy.Meta.Namespace = "default"
@@ -200,14 +193,11 @@ func resourceRuleCreate(ctx context.Context, d *schema.ResourceData, m interface
 		for _, rule := range specMap["rules"].([]interface{}) {
 			ruleMap := rule.(map[string]interface{})
 			currentPolicy.Spec.Rules = append(currentPolicy.Spec.Rules, RuleDetail{
-				Name: ruleMap["policy"].(string),
+				Name: ruleMap["name"].(string),
+				// ... populate other fields of RuleDetail based on ruleMap
 			})
 		}
 	}
-
-	// Debug: print the currentPolicy after extracting
-	currentPolicyJSON, _ := json.Marshal(currentPolicy)
-	log.Printf("[DEBUG] Current policy after extracting: %s", string(currentPolicyJSON))
 
 	// Append the new rule to the currentPolicy
 	currentPolicy.Spec.Rules = append(currentPolicy.Spec.Rules, RuleDetail{
@@ -219,6 +209,7 @@ func resourceRuleCreate(ctx context.Context, d *schema.ResourceData, m interface
 		ToIPCollections:   toIPCollections,
 		Apps:              appStrings,
 		Action:            d.Get("action").(string),
+		// If you use the "disable" field, extract it from d and set it here
 	})
 
 	// Serialize to JSON
@@ -232,7 +223,7 @@ func resourceRuleCreate(ctx context.Context, d *schema.ResourceData, m interface
 	log.Printf("[DEBUG] JSON being sent to the server: %s", string(jsonBytes))
 
 	// Make the PUT request to update the policy
-	policyName := d.Get("policy").(string)
+	policyName := d.Get("name").(string)
 	if policyName == "" {
 		return diag.Errorf("Missing policy name")
 	}
@@ -260,10 +251,6 @@ func resourceRuleCreate(ctx context.Context, d *schema.ResourceData, m interface
 		return diag.FromErr(err)
 	}
 
-	// Debug: print the response body
-	responseBodyJSON, _ := json.Marshal(responseBody)
-	log.Printf("[DEBUG] Response body from the server: %s", string(responseBodyJSON))
-
 	d.SetId(responseBody.Meta.UUID)
 
 	return resourceRuleRead(ctx, d, m)
@@ -273,7 +260,7 @@ func resourceRuleRead(ctx context.Context, d *schema.ResourceData, m interface{}
 	config := m.(*Config)
 	client := config.Client()
 
-	url := config.Server + "/configs/security/v1/tenant/default/networksecuritypolicies/" + d.Get("policy").(string)
+	url := config.Server + "/configs/security/v1/tenant/default/networksecuritypolicies/" + d.Get("name").(string)
 
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
@@ -297,7 +284,7 @@ func resourceRuleRead(ctx context.Context, d *schema.ResourceData, m interface{}
 		return diag.FromErr(err)
 	}
 
-	d.Set("policy", rule.Meta.Name)
+	d.Set("name", rule.Meta.Name)
 	d.Set("tenant", rule.Meta.Tenant)
 	// Set other fields from the PolicyRule struct to the schema as required.
 
@@ -308,7 +295,7 @@ func resourceRuleDelete(ctx context.Context, d *schema.ResourceData, m interface
 	config := m.(*Config)
 	client := config.Client()
 
-	url := config.Server + "/configs/security/v1/tenant/default/networksecuritypolicies/" + d.Get("policy").(string)
+	url := config.Server + "/configs/security/v1/tenant/default/networksecuritypolicies/" + d.Get("name").(string)
 
 	log.Printf("[DEBUG] Deleting rule with URL: %s", url) // <-- Added debug log
 
