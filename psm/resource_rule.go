@@ -169,48 +169,49 @@ func resourceRuleCreate(ctx context.Context, d *schema.ResourceData, m interface
 
 	// Convert apps, from_ip_address, and to_ip_address from []interface{} to []string
 	appStrings := convertToStringSlice(d.Get("apps").([]interface{}))
-	fromIPStrings := convertToStringSlice(d.Get("from_ip_address").([]interface{}))
-	toIPStrings := convertToStringSlice(d.Get("to_ip_address").([]interface{}))
 	fromIPCollections := convertToStringSlice(d.Get("from_ip_collections").([]interface{}))
 	toIPCollections := convertToStringSlice(d.Get("to_ip_collections").([]interface{}))
 
-	// Fetch the existing policy using the resourcePolicyRead function
-	if diags := resourcePolicyRead(ctx, d, m); diags.HasError() {
+	// Fetch the existing policy using the resourceRuleRead function
+	currentPolicy := &PolicyRule{}
+	if diags := resourceRuleRead(ctx, d, m); diags.HasError() {
 		return diags
 	}
 
-	// Extract the current policy from the data source
-	currentPolicy := &PolicyRule{}
-	if v, ok := d.GetOk("meta"); ok {
-		metaMap := v.(map[string]interface{})
-		currentPolicy.Meta.Name = metaMap["name"].(string)
-		// Extract other meta fields if needed
+	if err := d.Set("meta", flattenMeta(currentPolicy.Meta)); err != nil {
+		return diag.FromErr(err)
 	}
-	currentPolicy.Meta.Namespace = "default"
+	if err := d.Set("spec", flattenSpec(currentPolicy.Spec)); err != nil {
+		return diag.FromErr(err)
+	}
 
-	if v, ok := d.GetOk("spec"); ok {
-		specMap := v.(map[string]interface{})
-		for _, rule := range specMap["rules"].([]interface{}) {
-			ruleMap := rule.(map[string]interface{})
-			currentPolicy.Spec.Rules = append(currentPolicy.Spec.Rules, RuleDetail{
-				Name: ruleMap["name"].(string),
-				// ... populate other fields of RuleDetail based on ruleMap
-			})
+	// Find or Add the new rule to the currentPolicy
+	ruleName := d.Get("rule_name").(string)
+	found := false
+	for idx, rule := range currentPolicy.Spec.Rules {
+		if rule.Name == ruleName {
+			currentPolicy.Spec.Rules[idx] = RuleDetail{
+				Name:              ruleName,
+				Description:       d.Get("description").(string),
+				FromIPCollections: fromIPCollections,
+				ToIPCollections:   toIPCollections,
+				Apps:              appStrings,
+				Action:            d.Get("action").(string),
+			}
+			found = true
+			break
 		}
 	}
-
-	// Append the new rule to the currentPolicy
-	currentPolicy.Spec.Rules = append(currentPolicy.Spec.Rules, RuleDetail{
-		Name:              d.Get("rule_name").(string),
-		Description:       d.Get("description").(string),
-		FromIPAddresses:   fromIPStrings,
-		ToIPAddresses:     toIPStrings,
-		FromIPCollections: fromIPCollections,
-		ToIPCollections:   toIPCollections,
-		Apps:              appStrings,
-		Action:            d.Get("action").(string),
-		// If you use the "disable" field, extract it from d and set it here
-	})
+	if !found {
+		currentPolicy.Spec.Rules = append(currentPolicy.Spec.Rules, RuleDetail{
+			Name:              ruleName,
+			Description:       d.Get("description").(string),
+			FromIPCollections: fromIPCollections,
+			ToIPCollections:   toIPCollections,
+			Apps:              appStrings,
+			Action:            d.Get("action").(string),
+		})
+	}
 
 	// Serialize to JSON
 	jsonBytes, err := json.Marshal(currentPolicy)
