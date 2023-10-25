@@ -269,7 +269,7 @@ func resourceRulesCreate(ctx context.Context, d *schema.ResourceData, m interfac
 		return diag.FromErr(err)
 	}
 
-	log.Printf("Setting resource ID to: %s\n", responsePolicy.Meta.Name)
+	log.Printf("Setting resource ID to: %s\n", responsePolicy.Meta.UUID)
 	//d.SetId(responsePolicy.Meta.Name)
 	d.SetId(responsePolicy.Meta.UUID)
 
