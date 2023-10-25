@@ -226,11 +226,7 @@ func resourceRulesCreate(ctx context.Context, d *schema.ResourceData, m interfac
 		newID := currentID + 1
 		policy.Meta.GenerationID = strconv.Itoa(newID)
 
-		currentUUID, err := strconv.Atoi(existingPolicy.Meta.UUID)
-		if err != nil {
-			return diag.FromErr(err)
-		}
-		policy.Meta.UUID = strconv.Itoa(currentUUID)
+		policy.Meta.UUID = existingPolicy.Meta.UUID
 		policy.Meta.SelfLink = config.Server + "/configs/security/v1/tenant/default/networksecuritypolicies/" + policy.Meta.Name
 
 	} else {
