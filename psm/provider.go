@@ -17,6 +17,7 @@ func Provider() *schema.Provider {
 			"psm_workload":     resourceWorkload(),
 			"psm_policy":       resourcePolicy(),
 			"psm_rule":         resourceRule(),
+			"psm_rules":        resourceRules(),
 			"psm_vrf":          resourceVRF(),
 			"psm_ipcollection": resourceIPCollection(),
 		},
