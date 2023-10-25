@@ -125,8 +125,8 @@ type Spec struct {
 type Rule struct {
 	Name              string   `json:"name"`
 	Description       string   `json:"description"`
-	FromIPCollections []string `json:"from-ip-collections"`
-	ToIPCollections   []string `json:"to-ip-collections"`
+	FromIPCollections []string `json:"from-ipcollections"`
+	ToIPCollections   []string `json:"to-ipcollections"`
 	Apps              []string `json:"apps"`
 	Action            string   `json:"action"`
 }
