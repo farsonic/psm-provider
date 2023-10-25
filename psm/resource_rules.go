@@ -182,6 +182,7 @@ func resourceRulesCreate(ctx context.Context, d *schema.ResourceData, m interfac
 	policy.Meta.Name = d.Get("policy_name").(string)
 	policy.Meta.Tenant = d.Get("tenant").(string)
 	policy.Meta.Namespace = d.Get("namespace").(string)
+	policy.Spec.PolicyDistributionTargets = d.Get("policy_distribution_target").(string)
 
 	log.Printf("Setting meta info: Name=%s, Tenant=%s, Namespace=%s\n", policy.Meta.Name, policy.Meta.Tenant, policy.Meta.Namespace)
 
@@ -193,6 +194,8 @@ func resourceRulesCreate(ctx context.Context, d *schema.ResourceData, m interfac
 		if matched, _ := regexp.MatchString("^[a-zA-Z0-9].*[a-zA-Z0-9]$", ruleName); !matched {
 			return diag.Errorf("invalid rule name: %s. The rule name must start and end with an alphanumeric character and can contain alphanumeric, -, _, and . characters in between", ruleName)
 		}
+		policy.Spec.AttachTenant = true
+		policy.Spec.PolicyDistributionTargets = 
 		policy.Spec.Rules = append(policy.Spec.Rules, Rule{
 			Name:              rule["rule_name"].(string),
 			Description:       rule["description"].(string),
@@ -209,7 +212,7 @@ func resourceRulesCreate(ctx context.Context, d *schema.ResourceData, m interfac
 		return diag.FromErr(err)
 	}
 
-	// Increment the GenerationID
+	// Increment the GenerationID, add the UUID
 	if existingPolicy != nil && existingPolicy.Meta.GenerationID != "" {
 		currentID, err := strconv.Atoi(existingPolicy.Meta.GenerationID)
 		if err != nil {
@@ -217,6 +220,14 @@ func resourceRulesCreate(ctx context.Context, d *schema.ResourceData, m interfac
 		}
 		newID := currentID + 1
 		policy.Meta.GenerationID = strconv.Itoa(newID)
+
+		currentUUID, err := strconv.Atoi(existingPolicy.Meta.UUID)
+		if err != nil {
+			return diag.FromErr(err)
+		}
+		policy.Meta.UUID = strconv.Itoa(currentUUID)
+		policy.Meta.SelfLink = config.Server + "/configs/security/v1/tenant/default/networksecuritypolicies/" + policy.Meta.Name
+
 	} else {
 		// If policy doesn't exist or GenerationID is not set, set it to "1"
 		policy.Meta.GenerationID = "1"
@@ -287,7 +298,9 @@ func resourceRulesRead(ctx context.Context, d *schema.ResourceData, m interface{
 		return diag.Errorf("failed to read rule: HTTP %s", resp.Status)
 	}
 
-	policy := &NetworkSecurityPolicy{}
+	policy := &NetworkSecurityPolicy{
+		APIVersion: "v1",
+	}
 	if err := json.NewDecoder(resp.Body).Decode(policy); err != nil {
 		return diag.FromErr(err)
 	}
