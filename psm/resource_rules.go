@@ -270,7 +270,8 @@ func resourceRulesCreate(ctx context.Context, d *schema.ResourceData, m interfac
 	}
 
 	log.Printf("Setting resource ID to: %s\n", responsePolicy.Meta.Name)
-	d.SetId(responsePolicy.Meta.Name)
+	//d.SetId(responsePolicy.Meta.Name)
+	d.SetId(responsePolicy.Meta.UUID)
 
 	log.Println("Fetching rules from server...")
 	return resourceRuleRead(ctx, d, m)
