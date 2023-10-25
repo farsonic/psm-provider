@@ -55,31 +55,31 @@ func resourceRule() *schema.Resource {
 			"from_ip_collections": {
 				Type:     schema.TypeList,
 				Elem:     &schema.Schema{Type: schema.TypeString},
-				Required: true,
+				Optional: true,
 				ForceNew: true,
 			},
 			"to_ip_collections": {
 				Type:     schema.TypeList,
 				Elem:     &schema.Schema{Type: schema.TypeString},
-				Required: true,
+				Optional: true,
 				ForceNew: true,
 			},
 			"from_ip_address": {
 				Type:     schema.TypeList,
 				Elem:     &schema.Schema{Type: schema.TypeString},
-				Required: true,
+				Optional: true,
 				ForceNew: true,
 			},
 			"to_ip_address": {
 				Type:     schema.TypeList,
 				Elem:     &schema.Schema{Type: schema.TypeString},
-				Required: true,
+				Optional: true,
 				ForceNew: true,
 			},
 			"apps": {
 				Type:     schema.TypeList,
 				Elem:     &schema.Schema{Type: schema.TypeString},
-				Required: true,
+				Optional: true,
 				ForceNew: true,
 			},
 			"action": {
