@@ -31,18 +31,21 @@ func resourceRules() *schema.Resource {
 				Optional: true,
 				Default:  "default",
 				ForceNew: true,
+				Computed: true,
 			},
 			"namespace": {
 				Type:     schema.TypeString,
 				Optional: true,
 				Default:  "default",
 				ForceNew: true,
+				Computed: true,
 			},
 			"policy_distribution_target": {
 				Type:     schema.TypeString,
 				Optional: true,
 				Default:  "default",
 				ForceNew: true,
+				Computed: true,
 			},
 			"rule": {
 				Type:     schema.TypeList,
