@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"regexp"
 	"strconv"
@@ -174,7 +175,7 @@ func resourceRulesCreate(ctx context.Context, d *schema.ResourceData, m interfac
 	config := m.(*Config)
 	client := config.Client()
 
-	fmt.Println("Initializing policy object...")
+	log.Println("Initializing policy object...")
 
 	policy := &NetworkSecurityPolicy{}
 	policy.Kind = "NetworkSecurityPolicy"
@@ -182,7 +183,7 @@ func resourceRulesCreate(ctx context.Context, d *schema.ResourceData, m interfac
 	policy.Meta.Tenant = d.Get("tenant").(string)
 	policy.Meta.Namespace = d.Get("namespace").(string)
 
-	fmt.Printf("Setting meta info: Name=%s, Tenant=%s, Namespace=%s\n", policy.Meta.Name, policy.Meta.Tenant, policy.Meta.Namespace)
+	log.Printf("Setting meta info: Name=%s, Tenant=%s, Namespace=%s\n", policy.Meta.Name, policy.Meta.Tenant, policy.Meta.Namespace)
 
 	rules := d.Get("rule").([]interface{})
 
@@ -202,7 +203,7 @@ func resourceRulesCreate(ctx context.Context, d *schema.ResourceData, m interfac
 		})
 	}
 
-	fmt.Println("Fetching the current policy...")
+	log.Println("Fetching the current policy...")
 	existingPolicy, err := getCurrentPolicy(ctx, client, config, policy.Meta.Name)
 	if err != nil {
 		return diag.FromErr(err)
@@ -221,15 +222,15 @@ func resourceRulesCreate(ctx context.Context, d *schema.ResourceData, m interfac
 		policy.Meta.GenerationID = "1"
 	}
 
-	fmt.Printf("Setting GenerationID to: %s\n", policy.Meta.GenerationID)
+	log.Printf("Setting GenerationID to: %s\n", policy.Meta.GenerationID)
 
 	jsonBytes, err := json.Marshal(policy)
 	if err != nil {
 		return diag.FromErr(err)
 	}
 
-	fmt.Println("JSON to be sent to the server:")
-	fmt.Println(string(jsonBytes))
+	log.Println("JSON to be sent to the server:")
+	log.Println(string(jsonBytes))
 
 	req, err := http.NewRequestWithContext(ctx, "PUT", config.Server+"/configs/security/v1/tenant/default/networksecuritypolicies/"+policy.Meta.Name, bytes.NewBuffer(jsonBytes))
 	if err != nil {
@@ -238,7 +239,7 @@ func resourceRulesCreate(ctx context.Context, d *schema.ResourceData, m interfac
 
 	req.AddCookie(&http.Cookie{Name: "sid", Value: config.SID})
 
-	fmt.Println("Sending request to server...")
+	log.Println("Sending request to server...")
 	resp, err := client.Do(req)
 	if err != nil {
 		return diag.FromErr(err)
@@ -250,16 +251,16 @@ func resourceRulesCreate(ctx context.Context, d *schema.ResourceData, m interfac
 		return diag.Errorf("failed to create rule: HTTP %d %s: %s", resp.StatusCode, resp.Status, bodyBytes)
 	}
 
-	fmt.Println("Decoding server response...")
+	log.Println("Decoding server response...")
 	responsePolicy := &NetworkSecurityPolicy{}
 	if err := json.NewDecoder(bytes.NewBuffer(bodyBytes)).Decode(responsePolicy); err != nil {
 		return diag.FromErr(err)
 	}
 
-	fmt.Printf("Setting resource ID to: %s\n", responsePolicy.Meta.Name)
+	log.Printf("Setting resource ID to: %s\n", responsePolicy.Meta.Name)
 	d.SetId(responsePolicy.Meta.Name)
 
-	fmt.Println("Fetching rules from server...")
+	log.Println("Fetching rules from server...")
 	return resourceRuleRead(ctx, d, m)
 }
 
