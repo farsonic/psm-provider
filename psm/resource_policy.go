@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"io/ioutil"
+	"io"
 	"log"
 	"net/http"
 
@@ -89,7 +89,7 @@ func resourcePolicyCreate(ctx context.Context, d *schema.ResourceData, m interfa
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		bodyBytes, _ := ioutil.ReadAll(resp.Body)
+		bodyBytes, _ := io.ReadAll(resp.Body)
 		return diag.Errorf("failed to create policy: HTTP %d %s: %s", resp.StatusCode, resp.Status, bodyBytes)
 	}
 
