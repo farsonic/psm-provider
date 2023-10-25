@@ -142,6 +142,8 @@ type Rule struct {
 	Description       string      `json:"description"`
 	Name              string      `json:"name"`
 	Disable           interface{} `json:"disable"`
+	FromIPAddresses   []string    `json:"from-ip-addresses"`
+	ToIPAddresses     []string    `json:"to-ip-addresses"`
 	FromIPCollections []string    `json:"from-ipcollections"`
 	ToIPCollections   []string    `json:"to-ipcollections"`
 }
@@ -206,6 +208,8 @@ func resourceRulesCreate(ctx context.Context, d *schema.ResourceData, m interfac
 			Description:       rule["description"].(string),
 			FromIPCollections: convertInterfaceSliceToStringSlice(rule["from_ip_collections"].([]interface{})),
 			ToIPCollections:   convertInterfaceSliceToStringSlice(rule["to_ip_collections"].([]interface{})),
+			FromIPAddresses:   convertInterfaceSliceToStringSlice(rule["from_ip_address"].([]interface{})),
+			ToIPAddresses:     convertInterfaceSliceToStringSlice(rule["to_ip_address"].([]interface{})),
 			Apps:              convertInterfaceSliceToStringSlice(rule["apps"].([]interface{})),
 			Action:            rule["action"].(string),
 		})
