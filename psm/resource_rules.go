@@ -281,14 +281,10 @@ func resourceRulesRead(ctx context.Context, d *schema.ResourceData, m interface{
 	config := m.(*Config)
 	client := config.Client()
 
-	policyName, ok := d.GetOk("policy_name")
-	if !ok {
-		log.Println("policy_name is not set")
-	}
+	policyName := d.Get("policy_name")
+	log.Println(policyName)
 
 	url := config.Server + "/configs/security/v1/tenant/default/networksecuritypolicies/" + policyName.(string)
-	log.Println(policyName)
-	log.Println(url)
 
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
