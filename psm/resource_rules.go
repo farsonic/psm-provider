@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 
@@ -160,9 +161,11 @@ func resourceRulesCreate(ctx context.Context, d *schema.ResourceData, m interfac
 	}
 
 	jsonBytes, err := json.Marshal(policy)
+
 	if err != nil {
 		return diag.FromErr(err)
 	}
+	fmt.Println(string(jsonBytes))
 
 	req, err := http.NewRequestWithContext(ctx, "PUT", config.Server+"/configs/security/v1/tenant/default/networksecuritypolicies", bytes.NewBuffer(jsonBytes))
 	if err != nil {
