@@ -195,7 +195,6 @@ func resourceRulesCreate(ctx context.Context, d *schema.ResourceData, m interfac
 			return diag.Errorf("invalid rule name: %s. The rule name must start and end with an alphanumeric character and can contain alphanumeric, -, _, and . characters in between", ruleName)
 		}
 		policy.Spec.AttachTenant = true
-		policy.Spec.PolicyDistributionTargets = 
 		policy.Spec.Rules = append(policy.Spec.Rules, Rule{
 			Name:              rule["rule_name"].(string),
 			Description:       rule["description"].(string),
