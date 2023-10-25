@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
@@ -107,33 +108,65 @@ func validateActions(val interface{}, key string) ([]string, []error) {
 }
 
 type NetworkSecurityPolicy struct {
-	Kind   string `json:"kind"`
-	Spec   Spec   `json:"spec"`
-	Meta   Meta   `json:"meta"`
-	Status Status `json:"status"`
+	Kind       string `json:"kind"`
+	APIVersion string `json:"api-version"`
+	Meta       Meta   `json:"meta"`
+	Spec       Spec   `json:"spec"`
+	Status     Status `json:"status"`
 }
 
 type Meta struct {
-	Name      string `json:"name"`
-	Tenant    string `json:"tenant"`
-	Namespace string `json:"namespace"`
+	Name            string                 `json:"name"`
+	Tenant          string                 `json:"tenant"`
+	Namespace       string                 `json:"namespace"`
+	GenerationID    string                 `json:"generation-id"`
+	ResourceVersion string                 `json:"resource-version"`
+	UUID            string                 `json:"uuid"`
+	Labels          map[string]interface{} `json:"labels"`
+	SelfLink        string                 `json:"self-link"`
+	DisplayName     map[string]interface{} `json:"display-name"`
 }
 
 type Spec struct {
-	Rules []Rule `json:"rules"`
+	AttachTenant              bool        `json:"attach-tenant"`
+	Rules                     []Rule      `json:"rules"`
+	Priority                  interface{} `json:"priority"`
+	PolicyDistributionTargets []string    `json:"policy-distribution-targets"`
 }
 
 type Rule struct {
-	Name              string   `json:"name"`
-	Description       string   `json:"description"`
-	FromIPCollections []string `json:"from-ipcollections"`
-	ToIPCollections   []string `json:"to-ipcollections"`
-	Apps              []string `json:"apps"`
-	Action            string   `json:"action"`
+	Apps              []string    `json:"apps"`
+	Action            string      `json:"action"`
+	Description       string      `json:"description"`
+	Name              string      `json:"name"`
+	Disable           interface{} `json:"disable"`
+	FromIPCollections []string    `json:"from-ipcollections"`
+	ToIPCollections   []string    `json:"to-ipcollections"`
 }
 
 type Status struct {
-	// Placeholder for any status fields you need.
+	PropagationStatus PropagationStatus `json:"propagation-status"`
+	RuleStatus        []RuleStatus      `json:"rule-status"`
+}
+
+type PropagationStatus struct {
+	GenerationID string      `json:"generation-id"`
+	Updated      int         `json:"updated"`
+	Pending      int         `json:"pending"`
+	MinVersion   string      `json:"min-version"`
+	Status       string      `json:"status"`
+	PdtStatus    []PdtStatus `json:"pdt-status"`
+}
+
+type PdtStatus struct {
+	Name    string `json:"name"`
+	Updated int    `json:"updated"`
+	Pending int    `json:"pending"`
+	Status  string `json:"status"`
+}
+
+type RuleStatus struct {
+	RuleHash string `json:"rule-hash"`
 }
 
 func resourceRulesCreate(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
@@ -160,8 +193,26 @@ func resourceRulesCreate(ctx context.Context, d *schema.ResourceData, m interfac
 		})
 	}
 
-	jsonBytes, err := json.Marshal(policy)
+	// Fetch the current policy
+	existingPolicy, err := getCurrentPolicy(ctx, client, config, policy.Meta.Name)
+	if err != nil {
+		return diag.FromErr(err)
+	}
 
+	// Increment the GenerationID
+	if existingPolicy != nil && existingPolicy.Meta.GenerationID != "" {
+		currentID, err := strconv.Atoi(existingPolicy.Meta.GenerationID)
+		if err != nil {
+			return diag.FromErr(err)
+		}
+		newID := currentID + 1
+		policy.Meta.GenerationID = strconv.Itoa(newID)
+	} else {
+		// If policy doesn't exist or GenerationID is not set, set it to "1"
+		policy.Meta.GenerationID = "1"
+	}
+
+	jsonBytes, err := json.Marshal(policy)
 	if err != nil {
 		return diag.FromErr(err)
 	}
@@ -169,7 +220,6 @@ func resourceRulesCreate(ctx context.Context, d *schema.ResourceData, m interfac
 	fmt.Println(string(jsonBytes))
 
 	req, err := http.NewRequestWithContext(ctx, "PUT", config.Server+"/configs/security/v1/tenant/default/networksecuritypolicies/"+policy.Meta.Name, bytes.NewBuffer(jsonBytes))
-
 	if err != nil {
 		return diag.FromErr(err)
 	}
@@ -225,13 +275,9 @@ func resourceRulesRead(ctx context.Context, d *schema.ResourceData, m interface{
 		return diag.FromErr(err)
 	}
 
-	// Update the Terraform state based on the response from the server
-	// Placeholder code, you might need to adjust for your specific schema and data
-
 	return nil
 }
 
-// Implement the Delete method for rules
 func resourceRulesDelete(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
 	config := m.(*Config)
 	client := config.Client()
@@ -264,4 +310,32 @@ func convertInterfaceSliceToStringSlice(input []interface{}) []string {
 		output = append(output, v.(string))
 	}
 	return output
+}
+
+func getCurrentPolicy(ctx context.Context, client *http.Client, config *Config, policyName string) (*NetworkSecurityPolicy, error) {
+	url := config.Server + "/configs/security/v1/tenant/default/networksecuritypolicies/" + policyName
+
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	req.AddCookie(&http.Cookie{Name: "sid", Value: config.SID})
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("failed to read rule: HTTP %s", resp.Status)
+	}
+
+	policy := &NetworkSecurityPolicy{}
+	if err := json.NewDecoder(resp.Body).Decode(policy); err != nil {
+		return nil, err
+	}
+
+	return policy, nil
 }
