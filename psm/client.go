@@ -39,7 +39,7 @@ func (c *Config) Authenticate() error {
 
 	req.Header.Set("Content-Type", "application/json") // Specify that we're sending JSON to the PSM server, not just basic authentication
 
-	client := c.Client() // Using a custom created client to allow for Authentication bypass.
+	client := c.Client()
 	resp, err := client.Do(req)
 	if err != nil {
 		return err
