@@ -167,60 +167,30 @@ func resourceRuleCreate(ctx context.Context, d *schema.ResourceData, m interface
 	config := m.(*Config)
 	client := config.Client()
 
-	// Convert apps, from_ip_address, and to_ip_address from []interface{} to []string
-	appStrings := convertToStringSlice(d.Get("apps").([]interface{}))
-	fromIPStrings := convertToStringSlice(d.Get("from_ip_address").([]interface{}))
-	toIPStrings := convertToStringSlice(d.Get("to_ip_address").([]interface{}))
-	fromIPCollections := convertToStringSlice(d.Get("from_ip_collections").([]interface{}))
-	toIPCollections := convertToStringSlice(d.Get("to_ip_collections").([]interface{}))
+	// Get the rules JSON directly from the resource data
+	rulesJSON := d.Get("rules_json").(string)
 
-	// Fetch the existing policy using the resourcePolicyRead function
-	if diags := resourcePolicyRead(ctx, d, m); diags.HasError() {
-		return diags
+	// Debug logs to view the received JSON
+	log.Printf("[DEBUG] Rules JSON received: %s", rulesJSON)
+
+	// Deserialize the rules JSON into the appropriate Go struct
+	var rules []PolicyRule
+	if err := json.Unmarshal([]byte(rulesJSON), &rules); err != nil {
+		return diag.FromErr(err)
 	}
 
-	// Extract the current policy from the data source
-	currentPolicy := &PolicyRule{}
-	if v, ok := d.GetOk("meta"); ok {
-		metaMap := v.(map[string]interface{})
-		currentPolicy.Meta.Name = metaMap["name"].(string)
-		// Extract other meta fields if needed
-	}
-	currentPolicy.Meta.Namespace = "default"
+	// Assuming you want to use the first rule in this function.
+	// Note: If you want to loop through all the rules and apply logic for each one, you can expand on this logic.
+	rule := rules[0]
 
-	if v, ok := d.GetOk("spec"); ok {
-		specMap := v.(map[string]interface{})
-		for _, rule := range specMap["rules"].([]interface{}) {
-			ruleMap := rule.(map[string]interface{})
-			currentPolicy.Spec.Rules = append(currentPolicy.Spec.Rules, RuleDetail{
-				Name: ruleMap["name"].(string),
-				// ... populate other fields of RuleDetail based on ruleMap
-			})
-		}
-	}
-
-	// Append the new rule to the currentPolicy
-	currentPolicy.Spec.Rules = append(currentPolicy.Spec.Rules, RuleDetail{
-		Name:              d.Get("rule_name").(string),
-		Description:       d.Get("description").(string),
-		FromIPAddresses:   fromIPStrings,
-		ToIPAddresses:     toIPStrings,
-		FromIPCollections: fromIPCollections,
-		ToIPCollections:   toIPCollections,
-		Apps:              appStrings,
-		Action:            d.Get("action").(string),
-		// If you use the "disable" field, extract it from d and set it here
-	})
-
-	// Serialize to JSON
-	jsonBytes, err := json.Marshal(currentPolicy)
+	// Serialize the rule (or modified version of it) back to JSON
+	jsonBytes, err := json.Marshal(rule)
 	if err != nil {
 		return diag.FromErr(err)
 	}
 
 	// Debug logs
-	log.Printf("[DEBUG] Updated policy with new rule: %v", currentPolicy)
-	log.Printf("[DEBUG] JSON being sent to the server: %s", string(jsonBytes))
+	log.Printf("[DEBUG] Rule being sent to server: %s", string(jsonBytes))
 
 	// Make the PUT request to update the policy
 	policyName := d.Get("name").(string)
@@ -243,7 +213,7 @@ func resourceRuleCreate(ctx context.Context, d *schema.ResourceData, m interface
 
 	if resp.StatusCode != http.StatusOK {
 		bodyBytes, _ := ioutil.ReadAll(resp.Body)
-		return diag.Errorf("failed to update rule: HTTP %d %s: %s", resp.StatusCode, resp.Status, bodyBytes)
+		return diag.Errorf("failed to update rule: HTTP %d %s: %s", resp.StatusCode, resp.Status, string(bodyBytes))
 	}
 
 	responseBody := &PolicyRule{}
@@ -253,7 +223,7 @@ func resourceRuleCreate(ctx context.Context, d *schema.ResourceData, m interface
 
 	d.SetId(responseBody.Meta.UUID)
 
-	return resourceRuleRead(ctx, d, m)
+	return nil
 }
 
 func resourceRuleRead(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
