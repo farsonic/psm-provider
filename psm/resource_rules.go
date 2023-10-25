@@ -182,7 +182,13 @@ func resourceRulesCreate(ctx context.Context, d *schema.ResourceData, m interfac
 	policy.Meta.Name = d.Get("policy_name").(string)
 	policy.Meta.Tenant = d.Get("tenant").(string)
 	policy.Meta.Namespace = d.Get("namespace").(string)
-	policy.Spec.PolicyDistributionTargets = d.Get("policy_distribution_target").(string)
+	if targets, ok := d.Get("policy_distribution_target").([]interface{}); ok {
+		for _, target := range targets {
+			policy.Spec.PolicyDistributionTargets = append(policy.Spec.PolicyDistributionTargets, target.(string))
+		}
+	} else {
+		// handle error or return a diagnostic message
+	}
 
 	log.Printf("Setting meta info: Name=%s, Tenant=%s, Namespace=%s\n", policy.Meta.Name, policy.Meta.Tenant, policy.Meta.Namespace)
 
