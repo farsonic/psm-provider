@@ -88,6 +88,7 @@ func resourceRules() *schema.Resource {
 							Elem:     &schema.Schema{Type: schema.TypeString},
 							Optional: true,
 							ForceNew: true,
+							Default:  []interface{}{},
 						},
 						"apps": {
 							Type:     schema.TypeList,
