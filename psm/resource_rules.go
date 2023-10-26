@@ -170,9 +170,8 @@ func resourceRulesCreate(ctx context.Context, d *schema.ResourceData, m interfac
 	policy := &NetworkSecurityPolicy{
 		Kind: "NetworkSecurityPolicy",
 		Meta: Meta{
-			Name:      d.Get("policy_name").(string),
-			Tenant:    d.Get("tenant").(string),
-			Namespace: d.Get("namespace").(string),
+			Name:   d.Get("policy_name").(string),
+			Tenant: d.Get("tenant").(string),
 		},
 		Spec: Spec{
 			PolicyDistributionTargets: []string{d.Get("policy_distribution_target").(string)},
@@ -184,12 +183,13 @@ func resourceRulesCreate(ctx context.Context, d *schema.ResourceData, m interfac
 	if err != nil {
 		return diag.FromErr(err)
 	}
+	log.Printf("[DEBUG] Request JSON: %s\n", jsonBytes)
 
 	req, err := http.NewRequestWithContext(ctx, "POST", config.Server+"/configs/security/v1/tenant/default/networksecuritypolicies", bytes.NewBuffer(jsonBytes))
 	if err != nil {
 		return diag.FromErr(err)
 	}
-	log.Println(req)
+
 	// Set SID cookie for authentication which we have learnt from the initial login process
 	req.AddCookie(&http.Cookie{Name: "sid", Value: config.SID})
 
@@ -199,7 +199,7 @@ func resourceRulesCreate(ctx context.Context, d *schema.ResourceData, m interfac
 		return diag.FromErr(err)
 	}
 	defer response.Body.Close()
-	log.Println(response)
+
 	// Check that we received a HTTP 200 from the PSM server, there will be errors here if the security policy already exists on the server.
 	if response.StatusCode != http.StatusOK {
 		bodyBytes, _ := io.ReadAll(response.Body)
@@ -212,6 +212,9 @@ func resourceRulesCreate(ctx context.Context, d *schema.ResourceData, m interfac
 	if err := json.NewDecoder(response.Body).Decode(responsePolicy); err != nil {
 		return diag.FromErr(err)
 	}
+
+	responseJSON, _ := json.MarshalIndent(responsePolicy, "", "  ")
+	log.Printf("[DEBUG] Response JSON: %s\n", responseJSON)
 
 	d.SetId(responsePolicy.Meta.UUID)
 	d.Set("policy_name", responsePolicy.Meta.Name)
