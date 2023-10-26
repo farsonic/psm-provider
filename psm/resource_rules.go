@@ -65,19 +65,19 @@ func resourceRules() *schema.Resource {
 							Type:     schema.TypeList,
 							Elem:     &schema.Schema{Type: schema.TypeString},
 							Optional: true,
-							ForceNew: true,
+							ForceNew: false,
 						},
 						"to_ip_collections": {
 							Type:     schema.TypeList,
 							Elem:     &schema.Schema{Type: schema.TypeString},
 							Optional: true,
-							ForceNew: true,
+							ForceNew: false,
 						},
 						"from_ip_address": {
 							Type:     schema.TypeList,
 							Elem:     &schema.Schema{Type: schema.TypeString},
 							Optional: true,
-							ForceNew: true,
+							ForceNew: false,
 						},
 						"to_ip_address": {
 							Type:     schema.TypeList,
