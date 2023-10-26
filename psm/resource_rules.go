@@ -165,13 +165,13 @@ func resourceRulesCreate(ctx context.Context, d *schema.ResourceData, m interfac
 	config := m.(*Config)
 	client := config.Client()
 
-	// Create and populate a GO Struct with the values read from the terraform schema resource.
+	// Create the GO Struct that we will populate with data from the resource to send to the PSM server.
 	policy := &NetworkSecurityPolicy{
 		Kind: "NetworkSecurityPolicy",
 		Meta: Meta{
 			Name:      d.Get("policy_name").(string),
 			Tenant:    d.Get("tenant").(string),
-			Namespace: d.Get("namespace").(string), // Added missing assignment for Namespace
+			Namespace: d.Get("namespace").(string),
 		},
 		Spec: Spec{
 			PolicyDistributionTargets: []string{d.Get("policy_distribution_target").(string)},
@@ -192,6 +192,7 @@ func resourceRulesCreate(ctx context.Context, d *schema.ResourceData, m interfac
 	// Set SID cookie for authentication which we have learnt from the initial login process
 	req.AddCookie(&http.Cookie{Name: "sid", Value: config.SID})
 
+	// Send the request to the server and deal with errors
 	response, err := client.Do(req)
 	if err != nil {
 		return diag.FromErr(err)
@@ -205,6 +206,7 @@ func resourceRulesCreate(ctx context.Context, d *schema.ResourceData, m interfac
 		return diag.Errorf("Security Policy creation failed: %s", errMsg)
 	}
 
+	//Read the response from the server and then use this to populate the local Terraform state
 	responsePolicy := &NetworkSecurityPolicy{}
 	if err := json.NewDecoder(response.Body).Decode(responsePolicy); err != nil {
 		return diag.FromErr(err)
@@ -228,20 +230,74 @@ func resourceRulesCreate(ctx context.Context, d *schema.ResourceData, m interfac
 }
 
 func resourceRulesRead(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
-	url := config.Server + "/configs/network/v1/tenant/default/networks/" + d.Get("name").(string)
+	config := m.(*Config)
+	client := config.Client()
+
+	policyName := d.Get("policy_name").(string)
+	tenant := d.Get("tenant").(string)
+	policyDistributionTarget := d.Get("policy_distribution_target").(string)
+
+	requestPayload := NetworkSecurityPolicy{
+		Meta: Meta{
+			Name:        policyName,
+			Tenant:      tenant,
+			DisplayName: nil,
+		},
+		Spec: Spec{
+			AttachTenant:              true,
+			Priority:                  nil,
+			PolicyDistributionTargets: []string{policyDistributionTarget},
+		},
+	}
+
+	// Convert the request payload to JSON
+	jsonBytes, err := json.Marshal(requestPayload)
+	if err != nil {
+		return diag.FromErr(err)
+	}
+
+	// Construct the HTTP request
+	url := fmt.Sprintf("%s/configs/security/v1/tenant/%s/networksecuritypolicies/%s", config.Server, tenant, policyName)
+	req, err := http.NewRequestWithContext(ctx, "GET", url, bytes.NewBuffer(jsonBytes))
+	if err != nil {
+		return diag.FromErr(err)
+	}
+
+	// Set SID cookie for authentication
+	req.AddCookie(&http.Cookie{Name: "sid", Value: config.SID})
+
+	// Perform the HTTP request
+	response, err := client.Do(req)
+	if err != nil {
+		return diag.FromErr(err)
+	}
+	defer response.Body.Close()
+
+	if response.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(response.Body)
+		errMsg := fmt.Sprintf("Failed to get network security policy: HTTP %d %s: %s", response.StatusCode, response.Status, bodyBytes)
+		return diag.Errorf("Security Policy read failed: %s", errMsg)
+	}
+
+	responsePolicy := &NetworkSecurityPolicy{}
+	if err := json.NewDecoder(response.Body).Decode(responsePolicy); err != nil {
+		return diag.FromErr(err)
+	}
+
+	// Set Terraform state fields based on the response
+	d.SetId(responsePolicy.Meta.UUID)
+	d.Set("policy_name", responsePolicy.Meta.Name)
+	d.Set("tenant", responsePolicy.Meta.Tenant)
+	d.Set("policy_distribution_targets", responsePolicy.Spec.PolicyDistributionTargets)
+	return nil
 }
 
 func resourceRulesUpdate(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
-	url := config.Server + "/configs/network/v1/tenant/default/networks/" + d.Get("name").(string)
+	//url := config.Server + "/configs/network/v1/tenant/default/networks/" + d.Get("name").(string)
+	return nil
 }
 
 func resourceRulesDelete(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
-	url := config.Server + "/configs/network/v1/tenant/default/networks/" + d.Get("name").(string)
-}
-
-func getStringWithDefault(d *schema.ResourceData, key string, defaultValue string) string {
-	if v, ok := d.GetOk(key); ok && v.(string) != "" {
-		return v.(string)
-	}
-	return defaultValue
+	//url := config.Server + "/configs/network/v1/tenant/default/networks/" + d.Get("name").(string)
+	return nil
 }
