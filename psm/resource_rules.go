@@ -178,17 +178,16 @@ func resourceRulesCreate(ctx context.Context, d *schema.ResourceData, m interfac
 
 	log.Println("Initializing policy object...")
 
-	policy := &NetworkSecurityPolicy{}
-	policy.Kind = "NetworkSecurityPolicy"
-	policy.Meta.Name = d.Get("policy_name").(string)
-	policy.Meta.Tenant = d.Get("tenant").(string)
-	policy.Meta.Namespace = d.Get("namespace").(string)
-	if targets, ok := d.Get("policy_distribution_target").([]interface{}); ok {
-		for _, target := range targets {
-			policy.Spec.PolicyDistributionTargets = append(policy.Spec.PolicyDistributionTargets, target.(string))
-		}
-	} else {
-		// handle error or return a diagnostic message
+	policy := &NetworkSecurityPolicy{
+		Kind: "NetworkSecurityPolicy",
+		Meta: Meta{
+			Name:      getStringWithDefault(d, "policy_name", ""),
+			Tenant:    getStringWithDefault(d, "tenant", "default"),
+			Namespace: getStringWithDefault(d, "namespace", "default"),
+		},
+		Spec: Spec{
+			PolicyDistributionTargets: []string{getStringWithDefault(d, "policy_distribution_target", "default")},
+		},
 	}
 
 	log.Printf("Setting meta info: Name=%s, Tenant=%s, Namespace=%s\n", policy.Meta.Name, policy.Meta.Tenant, policy.Meta.Namespace)
@@ -205,11 +204,11 @@ func resourceRulesCreate(ctx context.Context, d *schema.ResourceData, m interfac
 		policy.Spec.Rules = append(policy.Spec.Rules, Rule{
 			Name:              rule["rule_name"].(string),
 			Description:       rule["description"].(string),
-			FromIPCollections: convertInterfaceSliceToStringSlice(rule["from_ip_collections"].([]interface{})),
-			ToIPCollections:   convertInterfaceSliceToStringSlice(rule["to_ip_collections"].([]interface{})),
-			FromIPAddresses:   convertInterfaceSliceToStringSlice(rule["from_ip_address"].([]interface{})),
-			ToIPAddresses:     convertInterfaceSliceToStringSlice(rule["to_ip_address"].([]interface{})),
-			Apps:              convertInterfaceSliceToStringSlice(rule["apps"].([]interface{})),
+			FromIPCollections: convertInterfaceSliceToStringSliceWithDefault(rule["from_ip_collections"].([]interface{}), []string{""}),
+			ToIPCollections:   convertInterfaceSliceToStringSliceWithDefault(rule["to_ip_collections"].([]interface{}), []string{""}),
+			FromIPAddresses:   convertInterfaceSliceToStringSliceWithDefault(rule["from_ip_address"].([]interface{}), []string{""}),
+			ToIPAddresses:     convertInterfaceSliceToStringSliceWithDefault(rule["to_ip_address"].([]interface{}), []string{""}),
+			Apps:              convertInterfaceSliceToStringSliceWithDefault(rule["apps"].([]interface{}), []string{""}),
 			Action:            rule["action"].(string),
 		})
 	}
@@ -220,7 +219,6 @@ func resourceRulesCreate(ctx context.Context, d *schema.ResourceData, m interfac
 		return diag.FromErr(err)
 	}
 
-	// Increment the GenerationID, add the UUID
 	if existingPolicy != nil && existingPolicy.Meta.GenerationID != "" {
 		currentID, err := strconv.Atoi(existingPolicy.Meta.GenerationID)
 		if err != nil {
@@ -273,7 +271,6 @@ func resourceRulesCreate(ctx context.Context, d *schema.ResourceData, m interfac
 	}
 
 	log.Printf("Setting resource ID to: %s\n", responsePolicy.Meta.UUID)
-	//d.SetId(responsePolicy.Meta.Name)
 	d.SetId(responsePolicy.Meta.UUID)
 
 	log.Println("Fetching rules from server...")
@@ -356,6 +353,31 @@ func convertInterfaceSliceToStringSlice(input []interface{}) []string {
 		output = append(output, v.(string))
 	}
 	return output
+}
+
+func getStringWithDefault(d *schema.ResourceData, key string, defaultVal string) string {
+	if val, ok := d.GetOk(key); ok {
+		return val.(string)
+	}
+	return defaultVal
+}
+
+func getSliceWithDefault(data map[string]interface{}, key string) []interface{} {
+	if value, ok := data[key].([]interface{}); ok && len(value) > 0 {
+		return value
+	}
+	return []interface{}{}
+}
+
+func convertInterfaceSliceToStringSliceWithDefault(input []interface{}, defaultVal []string) []string {
+	if input == nil || len(input) == 0 {
+		return defaultVal
+	}
+	result := make([]string, len(input))
+	for i, v := range input {
+		result[i] = v.(string)
+	}
+	return result
 }
 
 func getCurrentPolicy(ctx context.Context, client *http.Client, config *Config, policyName string) (*NetworkSecurityPolicy, error) {
