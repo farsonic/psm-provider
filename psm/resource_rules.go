@@ -58,9 +58,8 @@ func resourceRules() *schema.Resource {
 						},
 						"description": {
 							Type:     schema.TypeString,
-							Required: true,
+							Optional: true,
 							ForceNew: true,
-							Default:  []interface{}{},
 						},
 						"from_ip_collections": {
 							Type:     schema.TypeList,
