@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
@@ -188,7 +189,7 @@ func resourceRulesCreate(ctx context.Context, d *schema.ResourceData, m interfac
 	if err != nil {
 		return diag.FromErr(err)
 	}
-
+	log.Println(req)
 	// Set SID cookie for authentication which we have learnt from the initial login process
 	req.AddCookie(&http.Cookie{Name: "sid", Value: config.SID})
 
@@ -198,7 +199,7 @@ func resourceRulesCreate(ctx context.Context, d *schema.ResourceData, m interfac
 		return diag.FromErr(err)
 	}
 	defer response.Body.Close()
-
+	log.Println(response)
 	// Check that we received a HTTP 200 from the PSM server, there will be errors here if the security policy already exists on the server.
 	if response.StatusCode != http.StatusOK {
 		bodyBytes, _ := io.ReadAll(response.Body)
