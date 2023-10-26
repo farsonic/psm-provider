@@ -284,10 +284,12 @@ func resourceRulesRead(ctx context.Context, d *schema.ResourceData, m interface{
 	config := m.(*Config)
 	client := config.Client()
 
-	policyName := d.Get("policy_name")
-	log.Println(policyName)
+	policyName, ok := d.Get("policy_name").(string)
+	if !ok || policyName == "" {
+		return diag.Errorf("policy_name must be provided and cannot be an empty string")
+	}
 
-	url := config.Server + "/configs/security/v1/tenant/default/networksecuritypolicies/" + policyName.(string)
+	url := config.Server + "/configs/security/v1/tenant/default/networksecuritypolicies/" + policyName
 
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
@@ -301,6 +303,12 @@ func resourceRulesRead(ctx context.Context, d *schema.ResourceData, m interface{
 		return diag.FromErr(err)
 	}
 	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusNotFound {
+		// If the policy does not exist, clear the resource ID from state
+		d.SetId("")
+		return nil
+	}
 
 	if resp.StatusCode != http.StatusOK {
 		return diag.Errorf("failed to read rule: HTTP %s", resp.Status)
