@@ -237,7 +237,8 @@ func resourceRulesCreate(ctx context.Context, d *schema.ResourceData, m interfac
 	config := m.(*Config)
 	client := config.Client()
 
-	// Create the GO Struct that we will populate with data from the resource to send to the PSM server.
+	// Create the GO Struct that we will populate with data from the resource to send to the PSM server eventually as JSON. If there is something
+	// not being sent to the  server correctly the ensure this structure is correct.
 	policy := &NetworkSecurityPolicy{
 		Kind:       nil,
 		APIVersion: nil,
@@ -255,6 +256,7 @@ func resourceRulesCreate(ctx context.Context, d *schema.ResourceData, m interfac
 		Spec: Spec{
 			AttachTenant:              true,
 			PolicyDistributionTargets: []string{d.Get("policy_distribution_target").(string)},
+			Rules:                     []Rule{},
 		},
 	}
 
