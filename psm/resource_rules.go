@@ -298,10 +298,22 @@ func resourceRulesRead(ctx context.Context, d *schema.ResourceData, m interface{
 	}
 
 	// Set Terraform state fields based on the response
+	// Need to confirm these are correct on read
 	d.SetId(*responsePolicy.Meta.UUID)
 	d.Set("policy_name", responsePolicy.Meta.Name)
 	d.Set("tenant", responsePolicy.Meta.Tenant)
 	d.Set("policy_distribution_targets", responsePolicy.Spec.PolicyDistributionTargets)
+	d.Set("namespace", responsePolicy.Meta.Namespace)
+	d.Set("generation_id", responsePolicy.Meta.GenerationID)
+	d.Set("resource_version", responsePolicy.Meta.ResourceVersion)
+	d.Set("self_link", responsePolicy.Meta.SelfLink)
+	d.Set("attach_tenant", responsePolicy.Spec.AttachTenant)
+	d.Set("policy_distribution_targets", responsePolicy.Spec.PolicyDistributionTargets)
+	d.Set("propagation_status_generation_id", responsePolicy.Status.PropagationStatus.GenerationID)
+	d.Set("updated", responsePolicy.Status.PropagationStatus.Updated)
+	d.Set("pending", responsePolicy.Status.PropagationStatus.Pending)
+	d.Set("min_version", responsePolicy.Status.PropagationStatus.MinVersion)
+	d.Set("status", responsePolicy.Status.PropagationStatus.Status)
 	return nil
 }
 
