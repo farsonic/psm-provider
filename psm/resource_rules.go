@@ -225,7 +225,7 @@ func resourceRulesCreate(ctx context.Context, d *schema.ResourceData, m interfac
 	responseJSON, _ := json.MarshalIndent(responsePolicy, "", "  ")
 	log.Printf("[DEBUG] Response JSON: %s\n", responseJSON)
 
-	d.SetId(responsePolicy.Meta.UUID)
+	d.SetId(*responsePolicy.Meta.UUID)
 	d.Set("policy_name", responsePolicy.Meta.Name)
 	d.Set("tenant", responsePolicy.Meta.Tenant)
 	d.Set("namespace", responsePolicy.Meta.Namespace)
@@ -298,7 +298,7 @@ func resourceRulesRead(ctx context.Context, d *schema.ResourceData, m interface{
 	}
 
 	// Set Terraform state fields based on the response
-	d.SetId(responsePolicy.Meta.UUID)
+	d.SetId(*responsePolicy.Meta.UUID)
 	d.Set("policy_name", responsePolicy.Meta.Name)
 	d.Set("tenant", responsePolicy.Meta.Tenant)
 	d.Set("policy_distribution_targets", responsePolicy.Spec.PolicyDistributionTargets)
