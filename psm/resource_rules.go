@@ -274,7 +274,7 @@ func resourceRulesCreate(ctx context.Context, d *schema.ResourceData, m interfac
 		"generation_id":    responsePolicy.Meta.GenerationID,
 		"resource_version": responsePolicy.Meta.ResourceVersion,
 		"uuid":             responsePolicy.Meta.UUID,
-		"lebels":           responsePolicy.Meta.Labels,
+		"labels":           responsePolicy.Meta.Labels,
 		"self_link":        responsePolicy.Meta.SelfLink,
 		//"display_name":     responsePolicy.Meta.DisplayName,
 	}}); err != nil {
