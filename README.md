@@ -48,4 +48,15 @@ resource "psm_network" "network" {
 }
 ```
 
+### IP Collections
+PSM allows the user to create groups of IP Addresses called IP Collections. These are then used within Security Policies (and elsewhere) to define the source and destination IP Addresses used for matches. 
+
+```
+resource "psm_ipcollection" "ipcollections" {
+  name     = "DatabaseServers"
+  addresses = "10.10.10.0/24" 
+}
+```
+
+
 
