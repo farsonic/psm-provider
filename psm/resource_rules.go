@@ -58,7 +58,7 @@ func resourceRules() *schema.Resource {
 							Type:     schema.TypeString,
 							Computed: true,
 						},
-						"resource-version": {
+						"resource_version": {
 							Type:     schema.TypeString,
 							Computed: true,
 						},
@@ -70,11 +70,11 @@ func resourceRules() *schema.Resource {
 							Type:     schema.TypeString,
 							Computed: true,
 						},
-						"self-link": {
+						"self_link": {
 							Type:     schema.TypeString,
 							Computed: true,
 						},
-						"display-name": {
+						"display_name": {
 							Type:     schema.TypeString,
 							Computed: true,
 						},
