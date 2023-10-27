@@ -42,7 +42,39 @@ func resourceRules() *schema.Resource {
 				Computed: true,
 				Elem: &schema.Resource{
 					Schema: map[string]*schema.Schema{
+						"name": {
+							Type:     schema.TypeString,
+							Computed: true,
+						},
+						"tenant": {
+							Type:     schema.TypeString,
+							Computed: true,
+						},
+						"namespace": {
+							Type:     schema.TypeString,
+							Computed: true,
+						},
 						"generation_id": {
+							Type:     schema.TypeString,
+							Computed: true,
+						},
+						"resource-version": {
+							Type:     schema.TypeString,
+							Computed: true,
+						},
+						"uuid": {
+							Type:     schema.TypeString,
+							Computed: true,
+						},
+						"labels": {
+							Type:     schema.TypeString,
+							Computed: true,
+						},
+						"self-link": {
+							Type:     schema.TypeString,
+							Computed: true,
+						},
+						"display-name": {
 							Type:     schema.TypeString,
 							Computed: true,
 						},
