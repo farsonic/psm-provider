@@ -137,12 +137,12 @@ func resourceRules() *schema.Resource {
 							Elem:     &schema.Schema{Type: schema.TypeString},
 							Optional: true,
 						},
-						"from_ip_address": {
+						"from_ip_addresses": {
 							Type:     schema.TypeList,
 							Elem:     &schema.Schema{Type: schema.TypeString},
 							Optional: true,
 						},
-						"to_ip_address": {
+						"to_ip_addresses": {
 							Type:     schema.TypeList,
 							Elem:     &schema.Schema{Type: schema.TypeString},
 							Optional: true,
@@ -271,6 +271,8 @@ func resourceRulesCreate(ctx context.Context, d *schema.ResourceData, m interfac
 				Action:            ruleMap["action"].(string),
 				Description:       ruleMap["description"].(string),
 				Name:              ruleMap["rule_name"].(string),
+				FromIPAddresses:   convertToStringSlice(ruleMap["from_ip_addresses"].([]interface{})),
+				ToIPAddresses:     convertToStringSlice(ruleMap["to_ip_addresses"].([]interface{})),
 				FromIPCollections: convertToStringSlice(ruleMap["from_ip_collections"].([]interface{})),
 				ToIPCollections:   convertToStringSlice(ruleMap["to_ip_collections"].([]interface{})),
 			}
