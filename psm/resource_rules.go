@@ -19,6 +19,7 @@ func resourceRules() *schema.Resource {
 	return &schema.Resource{
 		CreateContext: resourceRulesCreate,
 		ReadContext:   resourceRulesRead,
+		UpdateContext: resourceRulesUpdate,
 		DeleteContext: resourceRulesDelete,
 		Schema: map[string]*schema.Schema{
 			"policy_name": {
@@ -40,6 +41,7 @@ func resourceRules() *schema.Resource {
 			},
 			"meta": {
 				Type:     schema.TypeSet,
+				Computed: true,
 				Optional: true,
 				MaxItems: 1,
 				Elem: &schema.Resource{
@@ -361,8 +363,10 @@ func resourceRulesRead(ctx context.Context, d *schema.ResourceData, m interface{
 }
 
 func resourceRulesUpdate(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
-	//url := config.Server + "/configs/network/v1/tenant/default/networks/" + d.Get("name").(string)
-	return nil
+	// handle updates to other attributes here if necessary
+
+	// read the current state of the resource from the API
+	return resourceRulesRead(ctx, d, m)
 }
 
 func resourceRulesDelete(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
