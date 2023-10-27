@@ -264,13 +264,13 @@ func resourceRulesCreate(ctx context.Context, d *schema.ResourceData, m interfac
 		for _, v := range v.([]interface{}) {
 			ruleMap := v.(map[string]interface{})
 			rule := Rule{
-				Apps:              convertToStringSlice(ruleMap["apps"].([]interface{})),
-				Action:            ruleMap["action"].(string),
-				Description:       ruleMap["description"].(string),
-				Name:              ruleMap["rule_name"].(string),
-				Disable:           convertToBool(ruleMap["disable"]),
-				FromIPAddresses:   convertToStringSlice(ruleMap["from_ip_address"].([]interface{})),
-				ToIPAddresses:     convertToStringSlice(ruleMap["to_ip_address"].([]interface{})),
+				Apps:        convertToStringSlice(ruleMap["apps"].([]interface{})),
+				Action:      ruleMap["action"].(string),
+				Description: ruleMap["description"].(string),
+				Name:        ruleMap["rule_name"].(string),
+				Disable:     convertToBool(ruleMap["disable"]),
+				//FromIPAddresses:   convertToStringSlice(ruleMap["from_ip_address"].([]interface{})),
+				//ToIPAddresses:     convertToStringSlice(ruleMap["to_ip_address"].([]interface{})),
 				FromIPCollections: convertToStringSlice(ruleMap["from_ip_collections"].([]interface{})),
 				ToIPCollections:   convertToStringSlice(ruleMap["to_ip_collections"].([]interface{})),
 			}
