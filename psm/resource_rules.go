@@ -81,6 +81,37 @@ func resourceRules() *schema.Resource {
 					},
 				},
 			},
+			"spec": {
+				Type:     schema.TypeSet,
+				Computed: true,
+				Optional: true,
+				MaxItems: 1,
+				Elem: &schema.Resource{
+					Schema: map[string]*schema.Schema{
+						"attach_tenant": {
+							Type:     schema.TypeString,
+							Computed: true,
+						},
+						"rules": {
+							Type:     schema.TypeString,
+							Computed: true,
+						},
+						"priority": {
+							Type:     schema.TypeInt,
+							Optional: true,
+							Default:  0,
+							ForceNew: false,
+						},
+						"policy_distribution_targets": {
+							Type:     schema.TypeList,
+							Optional: true,
+							Elem:     &schema.Schema{Type: schema.TypeString},
+							Default:  []interface{}{"default"},
+							ForceNew: true,
+						},
+					},
+				},
+			},
 			"rule": {
 				Type:     schema.TypeList,
 				Optional: true,
@@ -263,10 +294,20 @@ func resourceRulesCreate(ctx context.Context, d *schema.ResourceData, m interfac
 	responseJSON, _ := json.MarshalIndent(responsePolicy, "", "  ")
 	log.Printf("[DEBUG] Response JSON: %s\n", responseJSON)
 
-	//set the local Terraform state based on the response
+	//set the local Terraform state based on the response. This needs to line up with the schema we have defined above
+	//but doesn't need to exactly match the PSM schema necessarily
 	d.SetId(*responsePolicy.Meta.UUID)
 	d.Set("policy_name", responsePolicy.Meta.Name)
 	d.Set("tenant", responsePolicy.Meta.Tenant)
+
+	if err := d.Set("spec", []interface{}{map[string]interface{}{
+		"attach_tenant":               responsePolicy.Spec.AttachTenant,
+		"rules":                       responsePolicy.Meta.Tenant,
+		"priority":                    responsePolicy.Spec.Priority,
+		"policy_distribution_targets": responsePolicy.Spec.PolicyDistributionTargets,
+	}}); err != nil {
+		return diag.FromErr(err)
+	}
 	if err := d.Set("meta", []interface{}{map[string]interface{}{
 		"name":             responsePolicy.Meta.Name,
 		"tenant":           responsePolicy.Meta.Tenant,
@@ -276,7 +317,6 @@ func resourceRulesCreate(ctx context.Context, d *schema.ResourceData, m interfac
 		"uuid":             responsePolicy.Meta.UUID,
 		"labels":           responsePolicy.Meta.Labels,
 		"self_link":        responsePolicy.Meta.SelfLink,
-		//"display_name":     responsePolicy.Meta.DisplayName,
 	}}); err != nil {
 		return diag.FromErr(err)
 	}
