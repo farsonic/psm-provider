@@ -15,8 +15,6 @@ func Provider() *schema.Provider {
 		ResourcesMap: map[string]*schema.Resource{
 			"psm_network":      resourceNetwork(),
 			"psm_workload":     resourceWorkload(),
-			"psm_policy":       resourcePolicy(),
-			"psm_rule":         resourceRule(),
 			"psm_rules":        resourceRules(),
 			"psm_vrf":          resourceVRF(),
 			"psm_ipcollection": resourceIPCollection(),
