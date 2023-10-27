@@ -20,15 +20,18 @@ terraform {
    psm = { 
       version = "0.1.81" 
       source = "local/provider/psm"
-   }
-   elasticstack = {
-      source  = "elastic/elasticstack"
-      version = "~>0.9"
-    }
-   terracurl = {
-      source  = "devops-rob/terracurl"
-      version = "1.0.1"
-    }
   }
 }
 ```
+
+You will need to configure the provider to communicate directly with the PSM server either with or without SSL certificate validation using the following definition. 
+
+```
+provider "psm" { 
+  user = "admin"
+  server = "https://PSM_SERVER"
+  password = "PSM_PASSWORD"
+  insecure = true
+}
+```
+
