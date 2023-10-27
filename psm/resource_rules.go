@@ -96,23 +96,23 @@ func resourceRules() *schema.Resource {
 }
 
 type NetworkSecurityPolicy struct {
-	Kind       string `json:"kind"`
-	APIVersion string `json:"api-version"`
-	Meta       Meta   `json:"meta"`
-	Spec       Spec   `json:"spec"`
-	Status     Status `json:"status"`
+	Kind       *string `json:"kind"`
+	APIVersion *string `json:"api-version"`
+	Meta       Meta    `json:"meta"`
+	Spec       Spec    `json:"spec"`
+	Status     Status  `json:"status"`
 }
 
 type Meta struct {
-	Name            string                 `json:"name"`
-	Tenant          string                 `json:"tenant"`
-	Namespace       string                 `json:"namespace"`
-	GenerationID    string                 `json:"generation-id"`
-	ResourceVersion string                 `json:"resource-version"`
-	UUID            string                 `json:"uuid"`
-	Labels          map[string]interface{} `json:"labels"`
-	SelfLink        string                 `json:"self-link"`
-	DisplayName     map[string]interface{} `json:"display-name"`
+	Name            string                  `json:"name"`
+	Tenant          string                  `json:"tenant"`
+	Namespace       *string                 `json:"namespace"`
+	GenerationID    *string                 `json:"generation-id"`
+	ResourceVersion *string                 `json:"resource-version"`
+	UUID            *string                 `json:"uuid"`
+	Labels          *map[string]interface{} `json:"labels"`
+	SelfLink        *string                 `json:"self-link"`
+	DisplayName     map[string]interface{}  `json:"display-name"`
 }
 
 type Spec struct {
@@ -168,12 +168,21 @@ func resourceRulesCreate(ctx context.Context, d *schema.ResourceData, m interfac
 
 	// Create the GO Struct that we will populate with data from the resource to send to the PSM server.
 	policy := &NetworkSecurityPolicy{
-		Kind: "NetworkSecurityPolicy",
+		Kind:       nil,
+		APIVersion: nil,
 		Meta: Meta{
-			Name:   d.Get("policy_name").(string),
-			Tenant: d.Get("tenant").(string),
+			Name:            d.Get("policy_name").(string),
+			Tenant:          d.Get("tenant").(string),
+			Namespace:       nil,
+			GenerationID:    nil,
+			ResourceVersion: nil,
+			UUID:            nil,
+			Labels:          nil,
+			SelfLink:        nil,
+			DisplayName:     nil,
 		},
 		Spec: Spec{
+			AttachTenant:              true,
 			PolicyDistributionTargets: []string{d.Get("policy_distribution_target").(string)},
 		},
 	}
