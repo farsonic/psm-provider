@@ -37,6 +37,20 @@ func resourceRules() *schema.Resource {
 				Default:  "default",
 				ForceNew: true,
 			},
+			"meta": {
+				Type:     schema.TypeList,
+				Required: true,
+				ForceNew: true,
+				Elem: &schema.Resource{
+					Schema: map[string]*schema.Schema{
+						"generation_id": {
+							Type:     schema.TypeString,
+							Optional: true,
+							Computed: true,
+						},
+					},
+				},
+			},
 			"rule": {
 				Type:     schema.TypeList,
 				Required: true,
@@ -45,7 +59,7 @@ func resourceRules() *schema.Resource {
 					Schema: map[string]*schema.Schema{
 						"rule_name": {
 							Type:     schema.TypeString,
-							Optional: true,
+							Required: true,
 							ForceNew: true,
 						},
 						"description": {
@@ -57,19 +71,16 @@ func resourceRules() *schema.Resource {
 							Type:     schema.TypeList,
 							Elem:     &schema.Schema{Type: schema.TypeString},
 							Optional: true,
-							ForceNew: false,
 						},
 						"to_ip_collections": {
 							Type:     schema.TypeList,
 							Elem:     &schema.Schema{Type: schema.TypeString},
 							Optional: true,
-							ForceNew: false,
 						},
 						"from_ip_address": {
 							Type:     schema.TypeList,
 							Elem:     &schema.Schema{Type: schema.TypeString},
 							Optional: true,
-							ForceNew: false,
 						},
 						"to_ip_address": {
 							Type:     schema.TypeList,
@@ -199,17 +210,14 @@ func resourceRulesCreate(ctx context.Context, d *schema.ResourceData, m interfac
 		return diag.FromErr(err)
 	}
 
-	// Set SID cookie for authentication which we have learnt from the initial login process
+	// Grab the cookie and send the request to the server and deal with errors
 	req.AddCookie(&http.Cookie{Name: "sid", Value: config.SID})
-
-	// Send the request to the server and deal with errors
 	response, err := client.Do(req)
 	if err != nil {
 		return diag.FromErr(err)
 	}
 	defer response.Body.Close()
 
-	// Check that we received a HTTP 200 from the PSM server, there will be errors here if the security policy already exists on the server.
 	if response.StatusCode != http.StatusOK {
 		bodyBytes, _ := io.ReadAll(response.Body)
 		errMsg := fmt.Sprintf("Failed to create network: HTTP %d %s: %s", response.StatusCode, response.Status, bodyBytes)
@@ -225,6 +233,7 @@ func resourceRulesCreate(ctx context.Context, d *schema.ResourceData, m interfac
 	responseJSON, _ := json.MarshalIndent(responsePolicy, "", "  ")
 	log.Printf("[DEBUG] Response JSON: %s\n", responseJSON)
 
+	//set the local Terraform state based on the response
 	d.SetId(*responsePolicy.Meta.UUID)
 	d.Set("policy_name", responsePolicy.Meta.Name)
 	d.Set("tenant", responsePolicy.Meta.Tenant)
