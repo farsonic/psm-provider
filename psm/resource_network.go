@@ -89,10 +89,9 @@ type Network struct {
 }
 
 func resourceNetworkCreate(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
-	config := m.(*Config) // Cast to Config instead of *http.Client
+	config := m.(*Config) 
 	client := config.Client()
 
-	// Create a new network instance and populate required fields
 	network := &Network{}
 	network.Meta.Name = d.Get("name").(string)
 	network.Meta.Tenant = d.Get("tenant").(string)
@@ -189,16 +188,13 @@ func resourceNetworkRead(ctx context.Context, d *schema.ResourceData, m interfac
 		return diag.FromErr(err)
 	}
 
-	// Set the resource data from the network struct provided from Terraform plan
 	d.Set("name", network.Meta.Name)
-	//d.Set("tenant", network.Meta.Tenant) // Set the tenant to the value received from the server
 	d.Set("vlan_id", network.Spec.VlanID)
 
 	return nil
 }
 
 func resourceNetworkUpdate(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
-	// Start with a helper function to check if debug logging is enabled.
 	isDebugEnabled := func() bool {
 		return os.Getenv("TF_LOG") == "debug"
 	}
