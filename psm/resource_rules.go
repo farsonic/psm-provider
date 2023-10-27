@@ -323,55 +323,54 @@ func resourceRulesCreate(ctx context.Context, d *schema.ResourceData, m interfac
 }
 
 func resourceRulesRead(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
+	// Read the current configuration
 	config := m.(*Config)
 	client := config.Client()
 
-	// Construct the URL for the GET request
-	url := fmt.Sprintf("%s/configs/security/v1/tenant/default/networksecuritypolicies/%s", config.Server, d.Id())
-	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", config.Server+"/configs/security/v1/tenant/default/networksecuritypolicies"+d.get("policy_name"))
 	if err != nil {
 		return diag.FromErr(err)
 	}
 
-	// Add the session ID cookie
+	// Grab the cookie and send the request to the server and deal with errors
+	// A GET request is going to return the state of the security policy but not the rules
 	req.AddCookie(&http.Cookie{Name: "sid", Value: config.SID})
-
-	// Send the request
 	response, err := client.Do(req)
 	if err != nil {
 		return diag.FromErr(err)
 	}
 	defer response.Body.Close()
 
-	// Check if the policy was not found
-	if response.StatusCode == http.StatusNotFound {
-		// The policy does not exist, remove it from the Terraform state
-		d.SetId("")
-		return nil
-	}
-
 	if response.StatusCode != http.StatusOK {
 		bodyBytes, _ := io.ReadAll(response.Body)
-		errMsg := fmt.Sprintf("Failed to get network security policy: HTTP %d %s: %s", response.StatusCode, response.Status, bodyBytes)
-		return diag.Errorf(errMsg)
+		errMsg := fmt.Sprintf("Failed to create network: HTTP %d %s: %s", response.StatusCode, response.Status, bodyBytes)
+		return diag.Errorf("Security Policy creation failed: %s", errMsg)
 	}
 
-	// Decode the response
+	//Read the response from the server and then use this to populate the local Terraform state
 	responsePolicy := &NetworkSecurityPolicy{}
 	if err := json.NewDecoder(response.Body).Decode(responsePolicy); err != nil {
 		return diag.FromErr(err)
 	}
 
-	// Update the Terraform state
+	responseJSON, _ := json.MarshalIndent(responsePolicy, "", "  ")
+	log.Printf("[DEBUG] Response JSON: %s\n", responseJSON)
+
+	//set the local Terraform state based on the response. This needs to line up with the schema we have defined above
+	//but doesn't need to exactly match the PSM schema necessarily
+	d.SetId(*responsePolicy.Meta.UUID)
 	d.Set("policy_name", responsePolicy.Meta.Name)
 	d.Set("tenant", responsePolicy.Meta.Tenant)
-	d.Set("spec", []interface{}{map[string]interface{}{
+
+	if err := d.Set("spec", []interface{}{map[string]interface{}{
 		"attach_tenant":               responsePolicy.Spec.AttachTenant,
-		"rules":                       responsePolicy.Spec.Rules, // Assuming 'Rules' is a field in 'Spec'
+		"rules":                       responsePolicy.Meta.Tenant,
 		"priority":                    responsePolicy.Spec.Priority,
 		"policy_distribution_targets": responsePolicy.Spec.PolicyDistributionTargets,
-	}})
-	d.Set("meta", []interface{}{map[string]interface{}{
+	}}); err != nil {
+		return diag.FromErr(err)
+	}
+	if err := d.Set("meta", []interface{}{map[string]interface{}{
 		"name":             responsePolicy.Meta.Name,
 		"tenant":           responsePolicy.Meta.Tenant,
 		"namespace":        responsePolicy.Meta.Namespace,
@@ -380,8 +379,9 @@ func resourceRulesRead(ctx context.Context, d *schema.ResourceData, m interface{
 		"uuid":             responsePolicy.Meta.UUID,
 		"labels":           responsePolicy.Meta.Labels,
 		"self_link":        responsePolicy.Meta.SelfLink,
-	}})
-
+	}}); err != nil {
+		return diag.FromErr(err)
+	}
 	return nil
 }
 
