@@ -37,7 +37,14 @@ provider "psm" {
 
 ## Usage examples
 
-### Network 
+### VRF Instance
+VRF's provide isolation of routing tables as well as networks within the platform. The following definition will configure a new VRF instance capability within the DPU, however the underlying switch will also need to have the VRF configuration in place also. 
+
+```
+resource "psm_vrf" "customerABC" { 
+  name = "CustomerXYZ"
+}
+```
 
 
 ### Network 
