@@ -442,9 +442,23 @@ func resourceRulesRead(ctx context.Context, d *schema.ResourceData, m interface{
 	d.Set("policy_name", responsePolicy.Meta.Name)
 	d.Set("tenant", responsePolicy.Meta.Tenant)
 
+	rules := make([]interface{}, len(responsePolicy.Spec.Rules))
+	for i, rule := range responsePolicy.Spec.Rules {
+		rules[i] = map[string]interface{}{
+			"name":                rule.Name,
+			"action":              rule.Action,
+			"description":         rule.Description,
+			"apps":                rule.Apps,
+			"from_ip_collections": rule.FromIPCollections,
+			"to_ip_collections":   rule.ToIPCollections,
+			"from_ip_addresses":   rule.FromIPAddresses,
+			"to_ip_addresses":     rule.ToIPAddresses,
+		}
+	}
+
 	if err := d.Set("spec", []interface{}{map[string]interface{}{
 		"attach_tenant":               responsePolicy.Spec.AttachTenant,
-		"rules":                       responsePolicy.Spec.Rules,
+		"rules":                       rules,
 		"priority":                    responsePolicy.Spec.Priority,
 		"policy_distribution_targets": responsePolicy.Spec.PolicyDistributionTargets,
 	}}); err != nil {
