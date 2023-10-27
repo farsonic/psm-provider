@@ -58,5 +58,23 @@ resource "psm_ipcollection" "ipcollections" {
 }
 ```
 
+### Security Policies 
+Security policies are attached to either an individual network or to the VRF. If attached to a VRF then the policy is inherited by networks associated with that particular VRF. 
+
+```
+resource "psm_rules" "default_vrf_policy" {
+  policy_name                = "AllowSSH"
+  tenant                     = "default"
+  policy_distribution_target = "default"
+  rule {
+      rule_name = "AllowSSHTraffic"
+      description = "This rule allows SSH traffic from public IPs"
+      from_ip_collections = ["network2","network1"]
+      to_ip_collections   = ["network4"]
+      apps = ["SSH"]
+      action = "permit"
+    }
+```
+
 
 
