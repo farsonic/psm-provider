@@ -326,8 +326,9 @@ func resourceRulesRead(ctx context.Context, d *schema.ResourceData, m interface{
 	// Read the current configuration
 	config := m.(*Config)
 	client := config.Client()
+	policyName := d.Get("policy_name").(string)
 
-	req, err := http.NewRequestWithContext(ctx, "GET", config.Server+"/configs/security/v1/tenant/default/networksecuritypolicies"+d.get("policy_name"))
+	req, err := http.NewRequestWithContext(ctx, "GET", config.Server+"/configs/security/v1/tenant/default/networksecuritypolicies/"+policyName, nil)
 	if err != nil {
 		return diag.FromErr(err)
 	}
