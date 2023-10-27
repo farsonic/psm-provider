@@ -39,13 +39,11 @@ func resourceRules() *schema.Resource {
 			},
 			"meta": {
 				Type:     schema.TypeList,
-				Required: true,
-				ForceNew: true,
+				Computed: true,
 				Elem: &schema.Resource{
 					Schema: map[string]*schema.Schema{
 						"generation_id": {
 							Type:     schema.TypeString,
-							Optional: true,
 							Computed: true,
 						},
 					},
