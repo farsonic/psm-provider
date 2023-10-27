@@ -35,3 +35,17 @@ provider "psm" {
 }
 ```
 
+## Usage examples
+
+### Network 
+Within PSM a network definition defines the name of the network and the VLAN that will be redirected to a DPU. The following resource definition will create a network called "Database Network" which redirect VLAN 123 traffic to the DPU. 
+
+```
+resource "psm_network" "network" {
+  name     = "Database Network"
+  tenant   = "default" 
+  vlan_id  = 123
+}
+```
+
+
