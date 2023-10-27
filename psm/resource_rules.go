@@ -271,7 +271,6 @@ func resourceRulesCreate(ctx context.Context, d *schema.ResourceData, m interfac
 				Action:            ruleMap["action"].(string),
 				Description:       ruleMap["description"].(string),
 				Name:              ruleMap["rule_name"].(string),
-				Disable:           convertToBool(ruleMap["disable"]),
 				FromIPCollections: convertToStringSlice(ruleMap["from_ip_collections"].([]interface{})),
 				ToIPCollections:   convertToStringSlice(ruleMap["to_ip_collections"].([]interface{})),
 			}
