@@ -260,28 +260,22 @@ func resourceRulesCreate(ctx context.Context, d *schema.ResourceData, m interfac
 		},
 	}
 
-	policy.Spec.Rules = []Rule{}
 	if v, ok := d.GetOk("rule"); ok {
-		// Iterate over the rules in the Terraform configuration
 		for _, v := range v.([]interface{}) {
-			if v == nil {
-				continue
-			}
 			ruleMap, ok := v.(map[string]interface{})
 			if !ok {
-				rule := Rule{
-					Apps:        convertToStringSlice(ruleMap["apps"].([]interface{})),
-					Action:      ruleMap["action"].(string),
-					Description: ruleMap["description"].(string),
-					Name:        ruleMap["rule_name"].(string),
-					Disable:     convertToBool(ruleMap["disable"]),
-					//FromIPAddresses:   convertToStringSlice(ruleMap["from_ip_address"].([]interface{})),
-					//ToIPAddresses:     convertToStringSlice(ruleMap["to_ip_address"].([]interface{})),
-					FromIPCollections: convertToStringSlice(ruleMap["from_ip_collections"].([]interface{})),
-					ToIPCollections:   convertToStringSlice(ruleMap["to_ip_collections"].([]interface{})),
-				}
-				policy.Spec.Rules = append(policy.Spec.Rules, rule)
+				return diag.Errorf("unexpected type for rule: %T", v)
 			}
+			rule := Rule{
+				Apps:              convertToStringSlice(ruleMap["apps"].([]interface{})),
+				Action:            ruleMap["action"].(string),
+				Description:       ruleMap["description"].(string),
+				Name:              ruleMap["rule_name"].(string),
+				Disable:           convertToBool(ruleMap["disable"]),
+				FromIPCollections: convertToStringSlice(ruleMap["from_ip_collections"].([]interface{})),
+				ToIPCollections:   convertToStringSlice(ruleMap["to_ip_collections"].([]interface{})),
+			}
+			policy.Spec.Rules = append(policy.Spec.Rules, rule)
 		}
 	}
 
