@@ -84,6 +84,7 @@ resource "psm_rules" "default_vrf_policy" {
       apps = ["SSH"]
       action = "permit"
     }
+}
 ```
 
 
