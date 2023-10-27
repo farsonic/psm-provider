@@ -106,7 +106,6 @@ func resourceRules() *schema.Resource {
 							Type:     schema.TypeList,
 							Optional: true,
 							Elem:     &schema.Schema{Type: schema.TypeString},
-							Default:  []interface{}{"default"},
 							ForceNew: true,
 						},
 					},
