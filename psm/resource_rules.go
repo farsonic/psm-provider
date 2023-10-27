@@ -39,9 +39,9 @@ func resourceRules() *schema.Resource {
 				ForceNew: true,
 			},
 			"meta": {
-				Type:     schema.TypeList,
-				Computed: true,
-				ForceNew: true,
+				Type:     schema.TypeSet,
+				Optional: true,
+				MaxItems: 1,
 				Elem: &schema.Resource{
 					Schema: map[string]*schema.Schema{
 						"name": {
@@ -269,21 +269,19 @@ func resourceRulesCreate(ctx context.Context, d *schema.ResourceData, m interfac
 	d.SetId(*responsePolicy.Meta.UUID)
 	d.Set("policy_name", responsePolicy.Meta.Name)
 	d.Set("tenant", responsePolicy.Meta.Tenant)
-	if responsePolicy.Meta.Namespace != nil {
-		d.Set("namespace", *responsePolicy.Meta.Namespace)
+	if err := d.Set("meta", []interface{}{map[string]interface{}{
+		"name":             responsePolicy.Meta.Name,
+		"tenant":           responsePolicy.Meta.Tenant,
+		"namespace":        responsePolicy.Meta.Namespace,
+		"generation_id":    responsePolicy.Meta.GenerationID,
+		"resource_version": responsePolicy.Meta.ResourceVersion,
+		"uuid":             responsePolicy.Meta.UUID,
+		"lebels":           responsePolicy.Meta.Labels,
+		"self_link":        responsePolicy.Meta.SelfLink,
+		"display_name":     responsePolicy.Meta.DisplayName,
+	}}); err != nil {
+		return diag.FromErr(err)
 	}
-	if responsePolicy.Meta.GenerationID != nil {
-		d.Set("generation_id", *responsePolicy.Meta.GenerationID)
-	}
-	d.Set("resource_version", responsePolicy.Meta.ResourceVersion)
-	d.Set("self_link", responsePolicy.Meta.SelfLink)
-	d.Set("attach_tenant", responsePolicy.Spec.AttachTenant)
-	d.Set("policy_distribution_targets", responsePolicy.Spec.PolicyDistributionTargets)
-	d.Set("propagation_status_generation_id", responsePolicy.Status.PropagationStatus.GenerationID)
-	d.Set("updated", responsePolicy.Status.PropagationStatus.Updated)
-	d.Set("pending", responsePolicy.Status.PropagationStatus.Pending)
-	d.Set("min_version", responsePolicy.Status.PropagationStatus.MinVersion)
-	d.Set("status", responsePolicy.Status.PropagationStatus.Status)
 	return nil
 }
 
