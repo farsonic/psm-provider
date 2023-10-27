@@ -394,6 +394,42 @@ func resourceRulesUpdate(ctx context.Context, d *schema.ResourceData, m interfac
 }
 
 func resourceRulesDelete(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
-	//url := config.Server + "/configs/network/v1/tenant/default/networks/" + d.Get("name").(string)
+	// Read the current configuration
+	config := m.(*Config)
+	client := config.Client()
+	policyName := d.Get("policy_name").(string)
+
+	req, err := http.NewRequestWithContext(ctx, "DELETE", config.Server+"/configs/security/v1/tenant/default/networksecuritypolicies/"+policyName, nil)
+	if err != nil {
+		return diag.FromErr(err)
+	}
+
+	// Grab the cookie and send the request to the server and deal with errors
+	// A GET request is going to return the state of the security policy but not the rules
+	req.AddCookie(&http.Cookie{Name: "sid", Value: config.SID})
+	response, err := client.Do(req)
+	if err != nil {
+		return diag.FromErr(err)
+	}
+	defer response.Body.Close()
+
+	if response.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(response.Body)
+		errMsg := fmt.Sprintf("Failed to create network: HTTP %d %s: %s", response.StatusCode, response.Status, bodyBytes)
+		return diag.Errorf("Security Policy creation failed: %s", errMsg)
+	}
+
+	//Read the response from the server and then use this to populate the local Terraform state
+	responsePolicy := &NetworkSecurityPolicy{}
+	if err := json.NewDecoder(response.Body).Decode(responsePolicy); err != nil {
+		return diag.FromErr(err)
+	}
+
+	responseJSON, _ := json.MarshalIndent(responsePolicy, "", "  ")
+	log.Printf("[DEBUG] Response JSON: %s\n", responseJSON)
+
+	//set the local Terraform state based on the response. This needs to line up with the schema we have defined above
+	//but doesn't need to exactly match the PSM schema necessarily
+
 	return nil
 }
