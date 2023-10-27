@@ -485,6 +485,7 @@ func resourceRulesUpdate(ctx context.Context, d *schema.ResourceData, m interfac
 	// Uses a POST to create the Security Policy with a JSON Body and read the response.
 	config := m.(*Config)
 	client := config.Client()
+	policyName := d.Get("policy_name").(string)
 
 	// Create the GO Struct that we will populate with data from the resource to send to the PSM server eventually as JSON. If there is something
 	// not being sent to the  server correctly the ensure this structure is correct.
@@ -536,7 +537,7 @@ func resourceRulesUpdate(ctx context.Context, d *schema.ResourceData, m interfac
 	}
 	log.Printf("[DEBUG] Request JSON: %s\n", jsonBytes)
 
-	req, err := http.NewRequestWithContext(ctx, "PUT", config.Server+"/configs/security/v1/tenant/default/networksecuritypolicies", bytes.NewBuffer(jsonBytes))
+	req, err := http.NewRequestWithContext(ctx, "PUT", config.Server+"/configs/security/v1/tenant/default/networksecuritypolicies/"+policyName, bytes.NewBuffer(jsonBytes))
 	if err != nil {
 		return diag.FromErr(err)
 	}
