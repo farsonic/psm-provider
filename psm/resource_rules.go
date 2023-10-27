@@ -93,8 +93,51 @@ func resourceRules() *schema.Resource {
 							Computed: true,
 						},
 						"rules": {
-							Type:     schema.TypeString,
+							Type:     schema.TypeList,
 							Computed: true,
+							Elem: &schema.Resource{
+								Schema: map[string]*schema.Schema{
+									// Define the schema for a single rule here
+									"name": {
+										Type:     schema.TypeString,
+										Computed: true,
+									},
+									"action": {
+										Type:     schema.TypeString,
+										Computed: true,
+									},
+									"description": {
+										Type:     schema.TypeString,
+										Optional: true,
+										ForceNew: true,
+									},
+									"apps": {
+										Type:     schema.TypeList,
+										Elem:     &schema.Schema{Type: schema.TypeString},
+										Computed: true,
+									},
+									"from_ip_collections": {
+										Type:     schema.TypeList,
+										Elem:     &schema.Schema{Type: schema.TypeString},
+										Computed: true,
+									},
+									"to_ip_collections": {
+										Type:     schema.TypeList,
+										Elem:     &schema.Schema{Type: schema.TypeString},
+										Computed: true,
+									},
+									"from_ip_addresses": {
+										Type:     schema.TypeList,
+										Elem:     &schema.Schema{Type: schema.TypeString},
+										Computed: true,
+									},
+									"to_ip_addresses": {
+										Type:     schema.TypeList,
+										Elem:     &schema.Schema{Type: schema.TypeString},
+										Computed: true,
+									},
+								},
+							},
 						},
 						"priority": {
 							Type:     schema.TypeInt,
