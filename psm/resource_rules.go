@@ -480,10 +480,131 @@ func resourceRulesRead(ctx context.Context, d *schema.ResourceData, m interface{
 }
 
 func resourceRulesUpdate(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
-	// handle updates to other attributes here if necessary
+	// Create the initial empty policy here then start adding rules to it
+	// This will be called when Update determines there is no Security Policy in place.
+	// Uses a POST to create the Security Policy with a JSON Body and read the response.
+	config := m.(*Config)
+	client := config.Client()
 
-	// read the current state of the resource from the API
-	return resourceRulesRead(ctx, d, m)
+	// Create the GO Struct that we will populate with data from the resource to send to the PSM server eventually as JSON. If there is something
+	// not being sent to the  server correctly the ensure this structure is correct.
+	policy := &NetworkSecurityPolicy{
+		Kind:       nil,
+		APIVersion: nil,
+		Meta: Meta{
+			Name:            d.Get("policy_name").(string),
+			Tenant:          d.Get("tenant").(string),
+			Namespace:       nil,
+			GenerationID:    nil,
+			ResourceVersion: nil,
+			UUID:            nil,
+			Labels:          nil,
+			SelfLink:        nil,
+			DisplayName:     nil,
+		},
+		Spec: Spec{
+			AttachTenant:              true,
+			PolicyDistributionTargets: []string{d.Get("policy_distribution_target").(string)},
+			Rules:                     []Rule{},
+		},
+	}
+
+	if v, ok := d.GetOk("rule"); ok {
+		for _, v := range v.([]interface{}) {
+			ruleMap, ok := v.(map[string]interface{})
+			if !ok {
+				return diag.Errorf("unexpected type for rule: %T", v)
+			}
+			rule := Rule{
+				Apps:              convertToStringSlice(ruleMap["apps"].([]interface{})),
+				Action:            ruleMap["action"].(string),
+				Description:       ruleMap["description"].(string),
+				Name:              ruleMap["rule_name"].(string),
+				FromIPAddresses:   convertToStringSlice(ruleMap["from_ip_addresses"].([]interface{})),
+				ToIPAddresses:     convertToStringSlice(ruleMap["to_ip_addresses"].([]interface{})),
+				FromIPCollections: convertToStringSlice(ruleMap["from_ip_collections"].([]interface{})),
+				ToIPCollections:   convertToStringSlice(ruleMap["to_ip_collections"].([]interface{})),
+			}
+			policy.Spec.Rules = append(policy.Spec.Rules, rule)
+		}
+	}
+
+	// Convert the GO Struct into JSON
+	jsonBytes, err := json.Marshal(policy)
+	if err != nil {
+		return diag.FromErr(err)
+	}
+	log.Printf("[DEBUG] Request JSON: %s\n", jsonBytes)
+
+	req, err := http.NewRequestWithContext(ctx, "PUT", config.Server+"/configs/security/v1/tenant/default/networksecuritypolicies", bytes.NewBuffer(jsonBytes))
+	if err != nil {
+		return diag.FromErr(err)
+	}
+
+	// Grab the cookie and send the request to the server and deal with errors
+	req.AddCookie(&http.Cookie{Name: "sid", Value: config.SID})
+	response, err := client.Do(req)
+	if err != nil {
+		return diag.FromErr(err)
+	}
+	defer response.Body.Close()
+
+	if response.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(response.Body)
+		errMsg := fmt.Sprintf("Failed to create network: HTTP %d %s: %s", response.StatusCode, response.Status, bodyBytes)
+		return diag.Errorf("Security Policy creation failed: %s", errMsg)
+	}
+
+	//Read the response from the server and then use this to populate the local Terraform state
+	responsePolicy := &NetworkSecurityPolicy{}
+	if err := json.NewDecoder(response.Body).Decode(responsePolicy); err != nil {
+		return diag.FromErr(err)
+	}
+
+	responseJSON, _ := json.MarshalIndent(responsePolicy, "", "  ")
+	log.Printf("[DEBUG] Response JSON: %s\n", responseJSON)
+
+	//set the local Terraform state based on the response. This needs to line up with the schema we have defined above
+	//but doesn't need to exactly match the PSM schema necessarily
+	d.SetId(*responsePolicy.Meta.UUID)
+	d.Set("policy_name", responsePolicy.Meta.Name)
+	d.Set("tenant", responsePolicy.Meta.Tenant)
+
+	rules := make([]interface{}, len(responsePolicy.Spec.Rules))
+	for i, rule := range responsePolicy.Spec.Rules {
+		rules[i] = map[string]interface{}{
+			"name":                rule.Name,
+			"action":              rule.Action,
+			"description":         rule.Description,
+			"apps":                rule.Apps,
+			"from_ip_collections": rule.FromIPCollections,
+			"to_ip_collections":   rule.ToIPCollections,
+			"from_ip_addresses":   rule.FromIPAddresses,
+			"to_ip_addresses":     rule.ToIPAddresses,
+		}
+	}
+
+	if err := d.Set("spec", []interface{}{map[string]interface{}{
+		"attach_tenant":               responsePolicy.Spec.AttachTenant,
+		"rules":                       rules,
+		"priority":                    responsePolicy.Spec.Priority,
+		"policy_distribution_targets": responsePolicy.Spec.PolicyDistributionTargets,
+	}}); err != nil {
+		return diag.FromErr(err)
+	}
+	if err := d.Set("meta", []interface{}{map[string]interface{}{
+		"name":             responsePolicy.Meta.Name,
+		"tenant":           responsePolicy.Meta.Tenant,
+		"namespace":        responsePolicy.Meta.Namespace,
+		"generation_id":    responsePolicy.Meta.GenerationID,
+		"resource_version": responsePolicy.Meta.ResourceVersion,
+		"uuid":             responsePolicy.Meta.UUID,
+		"labels":           responsePolicy.Meta.Labels,
+		"self_link":        responsePolicy.Meta.SelfLink,
+	}}); err != nil {
+		return diag.FromErr(err)
+	}
+	return nil
 }
 
 func resourceRulesDelete(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
