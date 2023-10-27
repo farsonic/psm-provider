@@ -78,10 +78,6 @@ func resourceRules() *schema.Resource {
 							Type:     schema.TypeString,
 							Computed: true,
 						},
-						"display_name": {
-							Type:     schema.TypeString,
-							Computed: true,
-						},
 					},
 				},
 			},
@@ -280,7 +276,7 @@ func resourceRulesCreate(ctx context.Context, d *schema.ResourceData, m interfac
 		"uuid":             responsePolicy.Meta.UUID,
 		"lebels":           responsePolicy.Meta.Labels,
 		"self_link":        responsePolicy.Meta.SelfLink,
-		"display_name":     responsePolicy.Meta.DisplayName,
+		//"display_name":     responsePolicy.Meta.DisplayName,
 	}}); err != nil {
 		return diag.FromErr(err)
 	}
