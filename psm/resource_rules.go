@@ -258,6 +258,26 @@ func resourceRulesCreate(ctx context.Context, d *schema.ResourceData, m interfac
 		},
 	}
 
+	policy.Spec.Rules = []Rule{}
+	if v, ok := d.GetOk("rule"); ok {
+		// Iterate over the rules in the Terraform configuration
+		for _, v := range v.([]interface{}) {
+			ruleMap := v.(map[string]interface{})
+			rule := Rule{
+				Apps:              convertToStringSlice(ruleMap["apps"].([]interface{})),
+				Action:            ruleMap["action"].(string),
+				Description:       ruleMap["description"].(string),
+				Name:              ruleMap["rule_name"].(string),
+				Disable:           convertToBool(ruleMap["disable"]),
+				FromIPAddresses:   convertToStringSlice(ruleMap["from_ip_address"].([]interface{})),
+				ToIPAddresses:     convertToStringSlice(ruleMap["to_ip_address"].([]interface{})),
+				FromIPCollections: convertToStringSlice(ruleMap["from_ip_collections"].([]interface{})),
+				ToIPCollections:   convertToStringSlice(ruleMap["to_ip_collections"].([]interface{})),
+			}
+			policy.Spec.Rules = append(policy.Spec.Rules, rule)
+		}
+	}
+
 	// Convert the GO Struct into JSON
 	jsonBytes, err := json.Marshal(policy)
 	if err != nil {
@@ -432,4 +452,8 @@ func resourceRulesDelete(ctx context.Context, d *schema.ResourceData, m interfac
 	//but doesn't need to exactly match the PSM schema necessarily
 
 	return nil
+}
+
+func convertToBool(input interface{}) bool {
+	return input.(bool)
 }
