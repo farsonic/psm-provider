@@ -323,7 +323,7 @@ func resourceRulesCreate(ctx context.Context, d *schema.ResourceData, m interfac
 
 	if err := d.Set("spec", []interface{}{map[string]interface{}{
 		"attach_tenant":               responsePolicy.Spec.AttachTenant,
-		"rules":                       responsePolicy.Meta.Tenant,
+		"rules":                       responsePolicy.Spec.Rules,
 		"priority":                    responsePolicy.Spec.Priority,
 		"policy_distribution_targets": responsePolicy.Spec.PolicyDistributionTargets,
 	}}); err != nil {
@@ -387,7 +387,7 @@ func resourceRulesRead(ctx context.Context, d *schema.ResourceData, m interface{
 
 	if err := d.Set("spec", []interface{}{map[string]interface{}{
 		"attach_tenant":               responsePolicy.Spec.AttachTenant,
-		"rules":                       responsePolicy.Meta.Tenant,
+		"rules":                       responsePolicy.Spec.Rules,
 		"priority":                    responsePolicy.Spec.Priority,
 		"policy_distribution_targets": responsePolicy.Spec.PolicyDistributionTargets,
 	}}); err != nil {
