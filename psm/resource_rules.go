@@ -326,74 +326,62 @@ func resourceRulesRead(ctx context.Context, d *schema.ResourceData, m interface{
 	config := m.(*Config)
 	client := config.Client()
 
-	policyName := d.Get("policy_name").(string)
-	tenant := d.Get("tenant").(string)
-	policyDistributionTarget := d.Get("policy_distribution_target").(string)
-
-	requestPayload := NetworkSecurityPolicy{
-		Meta: Meta{
-			Name:        policyName,
-			Tenant:      tenant,
-			DisplayName: nil,
-		},
-		Spec: Spec{
-			AttachTenant:              true,
-			Priority:                  nil,
-			PolicyDistributionTargets: []string{policyDistributionTarget},
-		},
-	}
-
-	// Convert the request payload to JSON
-	jsonBytes, err := json.Marshal(requestPayload)
+	// Construct the URL for the GET request
+	url := fmt.Sprintf("%s/configs/security/v1/tenant/default/networksecuritypolicies/%s", config.Server, d.Id())
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
 		return diag.FromErr(err)
 	}
 
-	// Construct the HTTP request
-	url := fmt.Sprintf("%s/configs/security/v1/tenant/%s/networksecuritypolicies/%s", config.Server, tenant, policyName)
-	req, err := http.NewRequestWithContext(ctx, "GET", url, bytes.NewBuffer(jsonBytes))
-	if err != nil {
-		return diag.FromErr(err)
-	}
-
-	// Set SID cookie for authentication
+	// Add the session ID cookie
 	req.AddCookie(&http.Cookie{Name: "sid", Value: config.SID})
 
-	// Perform the HTTP request
+	// Send the request
 	response, err := client.Do(req)
 	if err != nil {
 		return diag.FromErr(err)
 	}
 	defer response.Body.Close()
 
+	// Check if the policy was not found
+	if response.StatusCode == http.StatusNotFound {
+		// The policy does not exist, remove it from the Terraform state
+		d.SetId("")
+		return nil
+	}
+
 	if response.StatusCode != http.StatusOK {
 		bodyBytes, _ := io.ReadAll(response.Body)
 		errMsg := fmt.Sprintf("Failed to get network security policy: HTTP %d %s: %s", response.StatusCode, response.Status, bodyBytes)
-		return diag.Errorf("Security Policy read failed: %s", errMsg)
+		return diag.Errorf(errMsg)
 	}
 
+	// Decode the response
 	responsePolicy := &NetworkSecurityPolicy{}
 	if err := json.NewDecoder(response.Body).Decode(responsePolicy); err != nil {
 		return diag.FromErr(err)
 	}
 
-	// Set Terraform state fields based on the response
-	// Need to confirm these are correct on read
-	d.SetId(*responsePolicy.Meta.UUID)
+	// Update the Terraform state
 	d.Set("policy_name", responsePolicy.Meta.Name)
 	d.Set("tenant", responsePolicy.Meta.Tenant)
-	d.Set("policy_distribution_targets", responsePolicy.Spec.PolicyDistributionTargets)
-	d.Set("namespace", responsePolicy.Meta.Namespace)
-	d.Set("generation_id", responsePolicy.Meta.GenerationID)
-	d.Set("resource_version", responsePolicy.Meta.ResourceVersion)
-	d.Set("self_link", responsePolicy.Meta.SelfLink)
-	d.Set("attach_tenant", responsePolicy.Spec.AttachTenant)
-	d.Set("policy_distribution_targets", responsePolicy.Spec.PolicyDistributionTargets)
-	d.Set("propagation_status_generation_id", responsePolicy.Status.PropagationStatus.GenerationID)
-	d.Set("updated", responsePolicy.Status.PropagationStatus.Updated)
-	d.Set("pending", responsePolicy.Status.PropagationStatus.Pending)
-	d.Set("min_version", responsePolicy.Status.PropagationStatus.MinVersion)
-	d.Set("status", responsePolicy.Status.PropagationStatus.Status)
+	d.Set("spec", []interface{}{map[string]interface{}{
+		"attach_tenant":               responsePolicy.Spec.AttachTenant,
+		"rules":                       responsePolicy.Spec.Rules, // Assuming 'Rules' is a field in 'Spec'
+		"priority":                    responsePolicy.Spec.Priority,
+		"policy_distribution_targets": responsePolicy.Spec.PolicyDistributionTargets,
+	}})
+	d.Set("meta", []interface{}{map[string]interface{}{
+		"name":             responsePolicy.Meta.Name,
+		"tenant":           responsePolicy.Meta.Tenant,
+		"namespace":        responsePolicy.Meta.Namespace,
+		"generation_id":    responsePolicy.Meta.GenerationID,
+		"resource_version": responsePolicy.Meta.ResourceVersion,
+		"uuid":             responsePolicy.Meta.UUID,
+		"labels":           responsePolicy.Meta.Labels,
+		"self_link":        responsePolicy.Meta.SelfLink,
+	}})
+
 	return nil
 }
 
