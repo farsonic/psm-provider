@@ -59,7 +59,7 @@ resource "psm_ipcollection" "ipcollections" {
 ```
 
 ### Security Policies 
-Security policies are attached to either an individual network or to the VRF. If attached to a VRF then the policy is inherited by networks associated with that particular VRF. 
+Security policies are attached to either an individual network or to the VRF. If attached to a VRF then the policy is inherited by networks associated with that particular VRF. If the tenant and/or the policy_distribution_target is not defined these will default to the default VRF. The from IP_Collections will need to be defined prior to them being mapped within the rule. 
 
 ```
 resource "psm_rules" "default_vrf_policy" {
