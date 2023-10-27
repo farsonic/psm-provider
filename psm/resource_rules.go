@@ -13,7 +13,8 @@ import (
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
-// Define the Terraform resource schema for rules
+// Define the Terraform resource schema for security policy. The schema defines how the local state is stored
+// and can be populated at runtime based on the response from the PSM server.
 func resourceRules() *schema.Resource {
 	return &schema.Resource{
 		CreateContext: resourceRulesCreate,
@@ -267,8 +268,12 @@ func resourceRulesCreate(ctx context.Context, d *schema.ResourceData, m interfac
 	d.SetId(*responsePolicy.Meta.UUID)
 	d.Set("policy_name", responsePolicy.Meta.Name)
 	d.Set("tenant", responsePolicy.Meta.Tenant)
-	d.Set("namespace", responsePolicy.Meta.Namespace)
-	d.Set("generation_id", *responsePolicy.Meta.GenerationID)
+	if responsePolicy.Meta.Namespace != nil {
+		d.Set("namespace", *responsePolicy.Meta.Namespace)
+	}
+	if responsePolicy.Meta.GenerationID != nil {
+		d.Set("generation_id", *responsePolicy.Meta.GenerationID)
+	}
 	d.Set("resource_version", responsePolicy.Meta.ResourceVersion)
 	d.Set("self_link", responsePolicy.Meta.SelfLink)
 	d.Set("attach_tenant", responsePolicy.Spec.AttachTenant)
