@@ -146,6 +146,14 @@ locals {
       subnet = "192.168.19.0/24"
       vrf = "default"
     }
+    nosubnet = {
+      name   = "nosubnet"
+      description = "nosubnet Network"
+      department = "Development"
+      vlan   = 1119
+      subnet = ""
+      vrf = "default"
+    }
   }
   firewall_rules = [
     {
