@@ -197,6 +197,7 @@ locals {
       action = "deny"
     }
   ]
+ filtered_networks = {for key, value in local.networks : key => value if value.subnet != ""}
 }
 
 resource "psm_vrf" "customerABC" { 
@@ -212,7 +213,7 @@ resource "psm_network" "network" {
 }
 
 resource "psm_ipcollection" "ipcollections" {
-  for_each = local.networks
+  for_each = local.filtered_networks
   name     = each.value.name
   addresses = [each.value.subnet]
 
