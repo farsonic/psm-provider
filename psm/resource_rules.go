@@ -202,7 +202,7 @@ type NetworkSecurityPolicy struct {
 type Meta struct {
 	Name            string                  `json:"name"`
 	Tenant          string                  `json:"tenant"`
-	Namespace       string                  `json:"namespace"`
+	Namespace       *string                 `json:"namespace"`
 	GenerationID    *string                 `json:"generation-id"`
 	ResourceVersion string                  `json:"resource-version"`
 	UUID            *string                 `json:"uuid"`
@@ -270,7 +270,7 @@ func resourceRulesCreate(ctx context.Context, d *schema.ResourceData, m interfac
 		Meta: Meta{
 			Name:      d.Get("policy_name").(string),
 			Tenant:    d.Get("tenant").(string),
-			Namespace: d.Get("namespace").(string),
+			Namespace: d.Get("namespace").(*string),
 			//GenerationID: nil,
 			//ResourceVersion: nil,
 			//UUID:        nil,
@@ -477,7 +477,7 @@ func resourceRulesUpdate(ctx context.Context, d *schema.ResourceData, m interfac
 		Meta: Meta{
 			Name:         d.Get("policy_name").(string),
 			Tenant:       d.Get("tenant").(string),
-			Namespace:    d.Get("namespace").(string),
+			Namespace:    d.Get("namespace").(*string),
 			GenerationID: nil,
 			//ResourceVersion: nil,
 			UUID:        nil,
