@@ -268,7 +268,7 @@ func resourceRulesCreate(ctx context.Context, d *schema.ResourceData, m interfac
 			//GenerationID: nil,
 			//ResourceVersion: nil,
 			//UUID:        nil,
-			//Labels:      nil,
+			Labels: nil,
 			//SelfLink:    nil,
 			//DisplayName: nil,
 		},
