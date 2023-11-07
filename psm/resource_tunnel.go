@@ -20,6 +20,14 @@ func resourceTunnel() *schema.Resource {
 		UpdateContext: resourceTunnelUpdate,
 		DeleteContext: resourceTunnelDelete,
 		Schema: map[string]*schema.Schema{
+			"kind": {
+				Type:     schema.TypeString,
+				Optional: true,
+			},
+			"api_version": {
+				Type:     schema.TypeString,
+				Optional: true,
+			},
 			"meta": {
 				Type:     schema.TypeList,
 				Optional: true,
