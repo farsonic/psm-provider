@@ -54,30 +54,6 @@ func resourceRules() *schema.Resource {
 							Type:     schema.TypeString,
 							Computed: true,
 						},
-						"namespace": {
-							Type:     schema.TypeString,
-							Computed: true,
-						},
-						"generation_id": {
-							Type:     schema.TypeString,
-							Computed: true,
-						},
-						"resource_version": {
-							Type:     schema.TypeString,
-							Computed: true,
-						},
-						"uuid": {
-							Type:     schema.TypeString,
-							Computed: true,
-						},
-						"labels": {
-							Type:     schema.TypeString,
-							Computed: true,
-						},
-						"self_link": {
-							Type:     schema.TypeString,
-							Computed: true,
-						},
 					},
 				},
 			},
