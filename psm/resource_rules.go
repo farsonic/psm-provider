@@ -262,9 +262,9 @@ func resourceRulesCreate(ctx context.Context, d *schema.ResourceData, m interfac
 		Kind:       nil,
 		APIVersion: nil,
 		Meta: Meta{
-			Name:   d.Get("policy_name").(string),
-			Tenant: d.Get("tenant").(string),
-			//Namespace:    nil,
+			Name:      d.Get("policy_name").(string),
+			Tenant:    d.Get("tenant").(string),
+			Namespace: nil,
 			//GenerationID: nil,
 			//ResourceVersion: nil,
 			//UUID:        nil,
