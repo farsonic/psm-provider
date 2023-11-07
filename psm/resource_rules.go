@@ -204,7 +204,7 @@ type Meta struct {
 	Tenant          string                  `json:"tenant"`
 	Namespace       string                  `json:"namespace"`
 	GenerationID    *string                 `json:"generation-id"`
-	ResourceVersion *string                 `json:"resource-version"`
+	ResourceVersion string                  `json:"resource-version"`
 	UUID            *string                 `json:"uuid"`
 	Labels          *map[string]interface{} `json:"labels"`
 	SelfLink        *string                 `json:"self-link"`
