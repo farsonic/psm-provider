@@ -48,11 +48,11 @@ resource "psm_vrf" "customerABC" {
 
 
 ### Network 
-Within PSM a network definition defines the name of the network and the VLAN that will be redirected to a DPU. The following resource definition will create a network called "Database Network" which redirect VLAN 123 traffic to the DPU. The VLAN will need to be configured on at least one switch in the network to be successfully propagated to the DPU. 
+Within PSM a network definition defines the name of the network and the VLAN that will be redirected to a DPU. The following resource definition will create a network called "Database Network" which redirect VLAN 123 traffic to the DPU. The VLAN will need to be configured on at least one switch in the network to be successfully propagated to the DPU. Not you still need to conform to PSM naming guidelines for the name of the network. 
 
 ```
 resource "psm_network" "network" {
-  name     = "Database Network"
+  name     = "DatabaseNetwork"
   tenant   = "default" 
   vlan_id  = 123
 }
