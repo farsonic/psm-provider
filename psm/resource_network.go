@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -89,7 +90,7 @@ type Network struct {
 }
 
 func resourceNetworkCreate(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
-	config := m.(*Config) 
+	config := m.(*Config)
 	client := config.Client()
 
 	network := &Network{}
@@ -131,7 +132,7 @@ func resourceNetworkCreate(ctx context.Context, d *schema.ResourceData, m interf
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		bodyBytes, _ := ioutil.ReadAll(resp.Body)
+		bodyBytes, _ := io.ReadAll(resp.Body)
 		errMsg := fmt.Sprintf("failed to create network: HTTP %d %s: %s", resp.StatusCode, resp.Status, bodyBytes)
 		// Added for additional debug if the JSON we send to the PSM server is invalid.
 		return diag.Diagnostics{

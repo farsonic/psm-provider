@@ -20,14 +20,6 @@ func resourceTunnel() *schema.Resource {
 		UpdateContext: resourceTunnelUpdate,
 		DeleteContext: resourceTunnelDelete,
 		Schema: map[string]*schema.Schema{
-			"kind": {
-				Type:     schema.TypeString,
-				Optional: true,
-			},
-			"api_version": {
-				Type:     schema.TypeString,
-				Optional: true,
-			},
 			"meta": {
 				Type:     schema.TypeList,
 				Optional: true,
@@ -311,7 +303,6 @@ func resourceTunnelCreate(ctx context.Context, d *schema.ResourceData, m interfa
 		},
 		Spec: TunnelSpec{
 			PolicyDistributionTargets: convertToStringSlice(d.Get("policy_distribution_target").([]interface{})),
-			//PolicyDistributionTargets: []string{d.Get("policy_distribution_target").(string)},
 			TunnelEndpoints: []TunnelEndpoint{
 				{
 					InterfaceName: d.Get("interface_name").(string),
