@@ -18,6 +18,7 @@ func Provider() *schema.Provider {
 			"psm_rules":        resourceRules(),
 			"psm_vrf":          resourceVRF(),
 			"psm_ipcollection": resourceIPCollection(),
+			"psm_tunnel":       resourceTunnel(),
 		},
 		Schema: map[string]*schema.Schema{
 			"user": &schema.Schema{

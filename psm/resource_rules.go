@@ -652,3 +652,11 @@ func resourceRulesDelete(ctx context.Context, d *schema.ResourceData, m interfac
 func convertToBool(input interface{}) bool {
 	return input.(bool)
 }
+
+func convertToStringSlice(input []interface{}) []string {
+	result := make([]string, len(input))
+	for i, v := range input {
+		result[i] = v.(string) // This assumes that the input is always of type []interface{} with string values.
+	}
+	return result
+}
