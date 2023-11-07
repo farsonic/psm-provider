@@ -42,7 +42,7 @@ VRF's provide isolation of routing tables as well as networks within the platfor
 
 ```
 resource "psm_vrf" "customerABC" { 
-  name = "CustomerXYZ"
+  name = "CustomerABC"
 }
 ```
 
