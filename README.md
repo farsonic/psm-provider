@@ -59,12 +59,12 @@ resource "psm_network" "network" {
 ```
 
 ### IP Collections
-PSM allows the user to create groups of IP Addresses called IP Collections. These are then used within Security Policies (and elsewhere) to define the source and destination IP Addresses used for matches. 
+PSM allows the user to create groups of IP Addresses called IP Collections. These are then used within Security Policies (and elsewhere) to define the source and destination IP Addresses used for matches. Addresses must be a list of strings, commar seperated if there is more than one subnet. No mask on the address is also acceptable and will result in an implicit /32 host mask. 
 
 ```
 resource "psm_ipcollection" "ipcollections" {
   name     = "DatabaseServers"
-  addresses = "10.10.10.0/24" 
+  addresses = ["10.10.10.0/24"] 
 }
 ```
 
