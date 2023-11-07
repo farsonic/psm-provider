@@ -33,12 +33,6 @@ func resourceRules() *schema.Resource {
 				Default:  "default",
 				ForceNew: true,
 			},
-			"namespace": {
-				Type:     schema.TypeString,
-				Optional: true,
-				Default:  "default",
-				ForceNew: true,
-			},
 			"policy_distribution_target": {
 				Type:     schema.TypeString,
 				Optional: true,
@@ -59,6 +53,11 @@ func resourceRules() *schema.Resource {
 						"tenant": {
 							Type:     schema.TypeString,
 							Computed: true,
+						},
+						"namespace": {
+							Type:     schema.TypeString,
+							Computed: true,
+							Optional: true,
 						},
 					},
 				},
