@@ -228,7 +228,7 @@ type Meta struct {
 	Tenant          string                  `json:"tenant"`
 	Namespace       *string                 `json:"namespace"`
 	GenerationID    *string                 `json:"generation-id"`
-	ResourceVersion string                  `json:"resource-version"`
+	ResourceVersion *string                 `json:"resource-version"`
 	UUID            *string                 `json:"uuid"`
 	Labels          *map[string]interface{} `json:"labels"`
 	SelfLink        *string                 `json:"self-link"`
@@ -292,15 +292,15 @@ func resourceRulesCreate(ctx context.Context, d *schema.ResourceData, m interfac
 		Kind:       nil,
 		APIVersion: nil,
 		Meta: Meta{
-			Name:      d.Get("policy_name").(string),
-			Tenant:    d.Get("tenant").(string),
-			Namespace: d.Get("namespace").(*string),
-			//GenerationID: nil,
-			//ResourceVersion: nil,
-			//UUID:        nil,
-			Labels: nil,
-			//SelfLink:    nil,
-			//DisplayName: nil,
+			Name:            d.Get("policy_name").(string),
+			Tenant:          d.Get("tenant").(string),
+			Namespace:       nil,
+			GenerationID:    nil,
+			ResourceVersion: nil,
+			UUID:            nil,
+			Labels:          nil,
+			SelfLink:        nil,
+			DisplayName:     nil,
 		},
 		Spec: Spec{
 			AttachTenant:              true,
@@ -499,15 +499,15 @@ func resourceRulesUpdate(ctx context.Context, d *schema.ResourceData, m interfac
 		Kind:       nil,
 		APIVersion: nil,
 		Meta: Meta{
-			Name:         d.Get("policy_name").(string),
-			Tenant:       d.Get("tenant").(string),
-			Namespace:    d.Get("namespace").(*string),
-			GenerationID: nil,
-			//ResourceVersion: nil,
-			UUID:        nil,
-			Labels:      nil,
-			SelfLink:    nil,
-			DisplayName: nil,
+			Name:            d.Get("policy_name").(string),
+			Tenant:          d.Get("tenant").(string),
+			Namespace:       nil,
+			GenerationID:    nil,
+			ResourceVersion: nil,
+			UUID:            nil,
+			Labels:          nil,
+			SelfLink:        nil,
+			DisplayName:     nil,
 		},
 		Spec: Spec{
 			AttachTenant:              true,
