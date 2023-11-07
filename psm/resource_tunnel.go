@@ -310,7 +310,8 @@ func resourceTunnelCreate(ctx context.Context, d *schema.ResourceData, m interfa
 			DisplayName:     nil,
 		},
 		Spec: TunnelSpec{
-			PolicyDistributionTargets: []string{d.Get("policy_distribution_target").(string)},
+			PolicyDistributionTargets: convertToStringSlice(d.Get("policy_distribution_target").([]interface{})),
+			//PolicyDistributionTargets: []string{d.Get("policy_distribution_target").(string)},
 			TunnelEndpoints: []TunnelEndpoint{
 				{
 					InterfaceName: d.Get("interface_name").(string),
@@ -381,8 +382,6 @@ func resourceTunnelCreate(ctx context.Context, d *schema.ResourceData, m interfa
 	responseJSON, _ := json.MarshalIndent(responseTunnel, "", "  ")
 	log.Printf("[DEBUG] Response JSON: %s\n", responseJSON)
 
-	//set the local Terraform state based on the response. This needs to line up with the schema we have defined above
-	//but doesn't need to exactly match the PSM schema necessarily
 	d.SetId(*responseTunnel.Meta.UUID)
 	d.Set("name", responseTunnel.Meta.Name)
 	d.Set("tenant", responseTunnel.Meta.Tenant)
