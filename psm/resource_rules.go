@@ -477,7 +477,7 @@ func resourceRulesUpdate(ctx context.Context, d *schema.ResourceData, m interfac
 		Meta: Meta{
 			Name:            d.Get("policy_name").(string),
 			Tenant:          d.Get("tenant").(string),
-			Namespace:       nil,
+			Namespace:       d.Get("namespace").(string),
 			GenerationID:    nil,
 			ResourceVersion: nil,
 			UUID:            nil,
