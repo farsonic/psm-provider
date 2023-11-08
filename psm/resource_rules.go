@@ -53,8 +53,6 @@ func resourceRules() *schema.Resource {
 						"tenant": {
 							Type:     schema.TypeString,
 							Computed: true,
-							Default:  "default",
-							ForceNew: true,
 						},
 						"namespace": {
 							Type:     schema.TypeString,
