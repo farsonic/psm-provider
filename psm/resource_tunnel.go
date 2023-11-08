@@ -235,15 +235,15 @@ type Tunnel struct {
 }
 
 type TunnelMeta struct {
-	Name            string                 `json:"name,omitempty"`
-	Tenant          string                 `json:"tenant"`
-	Namespace       *string                `json:"namespace,omitempty"`
-	GenerationID    *string                `json:"generation-id,omitempty"`
-	ResourceVersion *string                `json:"resource-version,omitempty"`
-	UUID            *string                `json:"uuid,omitempty"`
-	Labels          map[string]string      `json:"labels,omitempty"`
-	SelfLink        *string                `json:"self-link,omitempty"`
-	DisplayName     map[string]interface{} `json:"display-name,omitempty"`
+	Name            string                  `json:"name,omitempty"`
+	Tenant          string                  `json:"tenant"`
+	Namespace       *string                 `json:"namespace,omitempty"`
+	GenerationID    *string                 `json:"generation-id,omitempty"`
+	ResourceVersion *string                 `json:"resource-version,omitempty"`
+	UUID            *string                 `json:"uuid,omitempty"`
+	Labels          *map[string]interface{} `json:"labels,omitempty"`
+	SelfLink        *string                 `json:"self-link,omitempty"`
+	DisplayName     map[string]interface{}  `json:"display-name,omitempty"`
 }
 
 type TunnelSpec struct {
