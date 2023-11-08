@@ -317,7 +317,7 @@ func resourceTunnelCreate(ctx context.Context, d *schema.ResourceData, m interfa
 		},
 		Spec: TunnelSpec{
 			//PolicyDistributionTargets: convertToStringSlice(d.Get("policy_distribution_target").([]interface{})),
-			PolicyDistributionTargets: []string{d.Get("policy_distribution_target").(string)},
+			PolicyDistributionTargets: []string{d.Get("policy_distribution_targets").(string)},
 			TunnelEndpoints: []TunnelEndpoint{
 				{
 					InterfaceName: d.Get("interface_name").(string),
