@@ -30,7 +30,7 @@ func resourceTunnel() *schema.Resource {
 			},
 			"meta": {
 				Type:     schema.TypeList,
-				Optional: true,
+				Required: true,
 				MaxItems: 1,
 				Elem: &schema.Resource{
 					Schema: map[string]*schema.Schema{
@@ -85,7 +85,7 @@ func resourceTunnel() *schema.Resource {
 			},
 			"spec": {
 				Type:     schema.TypeList,
-				Optional: true,
+				Required: true,
 				MaxItems: 1,
 				Elem: &schema.Resource{
 					Schema: map[string]*schema.Schema{
@@ -105,11 +105,11 @@ func resourceTunnel() *schema.Resource {
 									},
 									"dse": {
 										Type:     schema.TypeString,
-										Optional: true,
+										Required: true,
 									},
 									"ike_version": {
 										Type:     schema.TypeString,
-										Optional: true,
+										Required: true,
 									},
 									"ike_sa": {
 										Type:     schema.TypeList,
@@ -119,26 +119,26 @@ func resourceTunnel() *schema.Resource {
 											Schema: map[string]*schema.Schema{
 												"ikev1_mode": {
 													Type:     schema.TypeString,
-													Optional: true,
+													Required: true,
 												},
 												"encryption_algorithms": {
 													Type:     schema.TypeList,
-													Optional: true,
+													Required: true,
 													Elem:     &schema.Schema{Type: schema.TypeString},
 												},
 												"hash_algorithms": {
 													Type:     schema.TypeList,
-													Optional: true,
+													Required: true,
 													Elem:     &schema.Schema{Type: schema.TypeString},
 												},
 												"dh_groups": {
 													Type:     schema.TypeList,
-													Optional: true,
+													Required: true,
 													Elem:     &schema.Schema{Type: schema.TypeString},
 												},
 												"rekey_lifetime": {
 													Type:     schema.TypeString,
-													Optional: true,
+													Required: true,
 												},
 												"pre_shared_key": {
 													Type:     schema.TypeString,
@@ -171,12 +171,12 @@ func resourceTunnel() *schema.Resource {
 											Schema: map[string]*schema.Schema{
 												"encryption_algorithms": {
 													Type:     schema.TypeList,
-													Optional: true,
+													Required: true,
 													Elem:     &schema.Schema{Type: schema.TypeString},
 												},
 												"dh_groups": {
 													Type:     schema.TypeList,
-													Optional: true,
+													Required: true,
 													Elem:     &schema.Schema{Type: schema.TypeString},
 												},
 												"rekey_lifetime": {
@@ -225,7 +225,7 @@ func resourceTunnel() *schema.Resource {
 						},
 						"policy_distribution_targets": {
 							Type:     schema.TypeList,
-							Optional: true,
+							Required: true,
 							Elem:     &schema.Schema{Type: schema.TypeString},
 						},
 					},
@@ -295,64 +295,85 @@ type Identifier struct {
 }
 
 func resourceTunnelCreate(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
-	// Create the initial empty policy here then start adding rules to it
-	// This will be called when Update determines there is no Security Policy in place.
-	// Uses a POST to create the Security Policy with a JSON Body and read the response.
 	config := m.(*Config)
 	client := config.Client()
 
 	// Instantiate the Go Struct that we will populate with data from the resource to send to the PSM server eventually as JSON. If there is something
 	// not being sent to the server correctly then ensure this structure is correct.
 	tunnel := &Tunnel{
-		Kind:       nil,
-		APIVersion: nil,
-		Meta: TunnelMeta{
-			Name:            d.Get("name").(string),
-			Tenant:          d.Get("tenant").(string),
-			Namespace:       nil,
-			GenerationID:    nil,
-			ResourceVersion: nil,
-			UUID:            nil,
-			Labels:          nil,
-			SelfLink:        nil,
-			DisplayName:     nil,
-		},
 		Spec: TunnelSpec{
-			//PolicyDistributionTargets: convertToStringSlice(d.Get("policy_distribution_target").([]interface{})),
-			PolicyDistributionTargets: []string{d.Get("policy_distribution_targets").(string)},
-			TunnelEndpoints: []TunnelEndpoint{
-				{
-					InterfaceName: d.Get("interface_name").(string),
-					DSE:           d.Get("dse").(string),
-					IKEVersion:    d.Get("ike_version").(string),
-					IKESA: &IKESA{
-						IKEV1Mode:            d.Get("ikev1_mode").(string),
-						EncryptionAlgorithms: convertToStringSlice(d.Get("encryption_algorithms").([]interface{})),
-						HashAlgorithms:       convertToStringSlice(d.Get("hash_algorithms").([]interface{})),
-						DHGroups:             convertToStringSlice(d.Get("dh_groups").([]interface{})),
-						RekeyLifetime:        d.Get("rekey_lifetime").(string),
-						PreSharedKey:         d.Get("pre_shared_key").(string),
-						ReauthLifetime:       d.Get("reauth_lifetime").(string),
-						DPDDelay:             d.Get("dpd_delay").(string),
-						IKEV1DPDTimeout:      d.Get("ikev1_dpd_timeout").(string),
-						IKEInitiator:         d.Get("ikev1_mode").(bool),
-					},
-					IPSECSA: &IPSECSA{
-						EncryptionAlgorithms: convertToStringSlice(d.Get("encryption_algorithms").([]interface{})),
-						DHGroups:             convertToStringSlice(d.Get("dh_groups").([]interface{})),
-						RekeyLifetime:        d.Get("rekey_lifetime").(string),
-					},
-					LocalIdentifier: Identifier{
-						Type:  d.Get("type").(string),
-						Value: d.Get("value").(string),
-					},
-					RemoteIdentifier: Identifier{
-						Type:  d.Get("type").(string),
-						Value: d.Get("value").(string),
-					},
-				},
-			},
+			PolicyDistributionTargets: convertToStringSlice(d.Get("policy_distribution_targets").([]interface{})),
+			TunnelEndpoints:           make([]TunnelEndpoint, 0), // Initialize as an empty slice
 		},
+	}
+
+	// Extract the tunnel_endpoints field which is a list of maps
+	tunnelEndpointsData, ok := d.GetOk("tunnel_endpoints")
+	if !ok {
+		return diag.Errorf("tunnel_endpoints is required")
+	}
+
+	for _, te := range tunnelEndpointsData.([]interface{}) {
+		teMap := te.(map[string]interface{})
+
+		// Create a new TunnelEndpoint struct
+		tunnelEndpoint := TunnelEndpoint{
+			InterfaceName: teMap["interface_name"].(string),
+			DSE:           teMap["dse"].(string),
+			IKEVersion:    teMap["ike_version"].(string),
+		}
+
+		// IKESA
+		if ikeSaList, ok := teMap["ike_sa"].([]interface{}); ok && len(ikeSaList) > 0 {
+			ikeSaMap := ikeSaList[0].(map[string]interface{})
+			ikeInitiator := false
+			if ikeInitiatorPtr := getBool(ikeSaMap, "ike_initiator"); ikeInitiatorPtr != nil {
+				ikeInitiator = *ikeInitiatorPtr
+			}
+			tunnelEndpoint.IKESA = &IKESA{
+				IKEV1Mode:            getString(ikeSaMap, "ikev1_mode"),
+				EncryptionAlgorithms: convertToStringSlice(ikeSaMap["encryption_algorithms"].([]interface{})),
+				HashAlgorithms:       convertToStringSlice(ikeSaMap["hash_algorithms"].([]interface{})),
+				DHGroups:             convertToStringSlice(ikeSaMap["dh_groups"].([]interface{})),
+				RekeyLifetime:        getString(ikeSaMap, "rekey_lifetime"),
+				PreSharedKey:         getString(ikeSaMap, "pre_shared_key"),
+				ReauthLifetime:       getString(ikeSaMap, "reauth_lifetime"),
+				DPDDelay:             getString(ikeSaMap, "dpd_delay"),
+				IKEV1DPDTimeout:      getString(ikeSaMap, "ikev1_dpd_timeout"),
+				IKEInitiator:         ikeInitiator,
+			}
+		}
+
+		// IPSECSA
+		if ipsecSaList, ok := teMap["ipsec_sa"].([]interface{}); ok && len(ipsecSaList) > 0 {
+			ipsecSaMap := ipsecSaList[0].(map[string]interface{})
+			tunnelEndpoint.IPSECSA = &IPSECSA{
+				EncryptionAlgorithms: convertToStringSlice(ipsecSaMap["encryption_algorithms"].([]interface{})),
+				DHGroups:             convertToStringSlice(ipsecSaMap["dh_groups"].([]interface{})),
+				RekeyLifetime:        getString(ipsecSaMap, "rekey_lifetime"),
+			}
+		}
+
+		// LocalIdentifier
+		if localIdList, ok := teMap["local_identifier"].([]interface{}); ok && len(localIdList) > 0 {
+			localIdMap := localIdList[0].(map[string]interface{})
+			tunnelEndpoint.LocalIdentifier = Identifier{
+				Type:  localIdMap["type"].(string),
+				Value: localIdMap["value"].(string),
+			}
+		}
+
+		// RemoteIdentifier
+		if remoteIdList, ok := teMap["remote_identifier"].([]interface{}); ok && len(remoteIdList) > 0 {
+			remoteIdMap := remoteIdList[0].(map[string]interface{})
+			tunnelEndpoint.RemoteIdentifier = Identifier{
+				Type:  remoteIdMap["type"].(string),
+				Value: remoteIdMap["value"].(string),
+			}
+		}
+
+		// Append the new TunnelEndpoint struct to the slice in TunnelSpec
+		tunnel.Spec.TunnelEndpoints = append(tunnel.Spec.TunnelEndpoints, tunnelEndpoint)
 	}
 
 	// Convert the GO Struct into JSON
@@ -455,5 +476,24 @@ func resourceTunnelDelete(ctx context.Context, d *schema.ResourceData, m interfa
 	// ...
 
 	// Return diagnostics (which can include errors if any)
+	return nil
+}
+
+func getString(data map[string]interface{}, key string) string {
+	if val, ok := data[key]; ok {
+		return val.(string)
+	}
+	return ""
+}
+
+func getBool(data map[string]interface{}, key string) *bool {
+	// Use GetOk to safely check for the presence of key
+	if val, ok := data[key]; ok {
+		// Check if the value is a bool and return a pointer to it
+		if b, ok := val.(bool); ok {
+			return &b
+		}
+	}
+	// Return nil if the key is not found or the value is not a bool
 	return nil
 }
