@@ -37,11 +37,13 @@ func resourceTunnel() *schema.Resource {
 						"name": {
 							Type:     schema.TypeString,
 							Optional: true,
+							ForceNew: true,
 						},
 						"tenant": {
 							Type:     schema.TypeString,
 							Optional: true,
 							Default:  "default",
+							ForceNew: true,
 						},
 						"namespace": {
 							Type:     schema.TypeString,
@@ -305,7 +307,7 @@ func resourceTunnelCreate(ctx context.Context, d *schema.ResourceData, m interfa
 		Kind:       nil,
 		APIVersion: nil,
 		Meta: TunnelMeta{
-			Name:            d.Get("policy_name").(string),
+			Name:            d.Get("name").(string),
 			Tenant:          d.Get("tenant").(string),
 			Namespace:       nil,
 			GenerationID:    nil,
