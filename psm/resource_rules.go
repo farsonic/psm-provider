@@ -659,10 +659,23 @@ func convertToBool(input interface{}) bool {
 	return input.(bool)
 }
 
-func convertToStringSlice(input []interface{}) []string {
-	result := make([]string, len(input))
-	for i, v := range input {
-		result[i] = v.(string) // This assumes that the input is always of type []interface{} with string values.
+/*
+func convertToStringSliceRules(input interface{}) ([]string, error) {
+	if input == nil {
+		return []string{}, nil
 	}
-	return result
+	inputSlice, ok := input.([]interface{})
+	if !ok {
+		return nil, fmt.Errorf("input is not a slice")
+	}
+	result := make([]string, len(inputSlice))
+	for i, v := range inputSlice {
+		str, ok := v.(string)
+		if !ok {
+			return nil, fmt.Errorf("value at index %d is not a string", i)
+		}
+		result[i] = str
+	}
+	return result, nil
 }
+*/

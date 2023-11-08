@@ -296,97 +296,69 @@ func resourceTunnelCreate(ctx context.Context, d *schema.ResourceData, m interfa
 	config := m.(*Config)
 	client := config.Client()
 
-	// Instantiate the Go Struct that we will populate with data from the resource to send to the PSM server eventually as JSON. If there is something
-	// not being sent to the server correctly then ensure this structure is correct.
+	// Assuming there is only one tunnel endpoint based on the schema
+	teData := d.Get("tunnel_endpoints").([]interface{})[0].(map[string]interface{})
+
+	// Create the IKESA and IPSECSA structs
+	ikeSaData := teData["ike_sa"].([]interface{})[0].(map[string]interface{})
+	ipsecSaData := teData["ipsec_sa"].([]interface{})[0].(map[string]interface{})
+	localIdData := teData["local_identifier"].([]interface{})[0].(map[string]interface{})
+	remoteIdData := teData["remote_identifier"].([]interface{})[0].(map[string]interface{})
+
+	// Create the Tunnel struct with all the necessary nested structs
 	tunnel := &Tunnel{
 		Spec: TunnelSpec{
+			HAMode:                    getString(teData, "ha_mode"),
 			PolicyDistributionTargets: convertToStringSlice(d.Get("policy_distribution_targets").([]interface{})),
-			TunnelEndpoints:           make([]TunnelEndpoint, 0), // Initialize as an empty slice
+			TunnelEndpoints: []TunnelEndpoint{
+				{
+					InterfaceName: getString(teData, "interface_name"),
+					DSE:           getString(teData, "dse"),
+					IKEVersion:    getString(teData, "ike_version"),
+					IKESA: &IKESA{
+						IKEV1Mode:            getString(ikeSaData, "ikev1_mode"),
+						EncryptionAlgorithms: convertToStringSlice(ikeSaData["encryption_algorithms"].([]interface{})),
+						HashAlgorithms:       convertToStringSlice(ikeSaData["hash_algorithms"].([]interface{})),
+						DHGroups:             convertToStringSlice(ikeSaData["dh_groups"].([]interface{})),
+						RekeyLifetime:        getString(ikeSaData, "rekey_lifetime"),
+						PreSharedKey:         getString(ikeSaData, "pre_shared_key"),
+						ReauthLifetime:       getString(ikeSaData, "reauth_lifetime"),
+						DPDDelay:             getString(ikeSaData, "dpd_delay"),
+						IKEV1DPDTimeout:      getString(ikeSaData, "ikev1_dpd_timeout"),
+						IKEInitiator:         getBool(ikeSaData, "ike_initiator"),
+					},
+					IPSECSA: &IPSECSA{
+						EncryptionAlgorithms: convertToStringSlice(ipsecSaData["encryption_algorithms"].([]interface{})),
+						DHGroups:             convertToStringSlice(ipsecSaData["dh_groups"].([]interface{})),
+						RekeyLifetime:        getString(ipsecSaData, "rekey_lifetime"),
+					},
+					LocalIdentifier: Identifier{
+						Type:  getString(localIdData, "type"),
+						Value: getString(localIdData, "value"),
+					},
+					RemoteIdentifier: Identifier{
+						Type:  getString(remoteIdData, "type"),
+						Value: getString(remoteIdData, "value"),
+					},
+				},
+			},
 		},
 	}
 
-	// Extract the tunnel_endpoints field which is a list of maps
-	tunnelEndpointsData, ok := d.GetOk("tunnel_endpoints")
-	if !ok {
-		return diag.Errorf("tunnel_endpoints is required")
-	}
-
-	for _, te := range tunnelEndpointsData.([]interface{}) {
-		teMap := te.(map[string]interface{})
-
-		// Create a new TunnelEndpoint struct
-		tunnelEndpoint := TunnelEndpoint{
-			InterfaceName: teMap["interface_name"].(string),
-			DSE:           teMap["dse"].(string),
-			IKEVersion:    teMap["ike_version"].(string),
-		}
-
-		// IKESA
-		if ikeSaList, ok := teMap["ike_sa"].([]interface{}); ok && len(ikeSaList) > 0 {
-			ikeSaMap := ikeSaList[0].(map[string]interface{})
-			ikeInitiator := false
-			if ikeInitiatorPtr := getBool(ikeSaMap, "ike_initiator"); ikeInitiatorPtr != nil {
-				ikeInitiator = *ikeInitiatorPtr
-			}
-			tunnelEndpoint.IKESA = &IKESA{
-				IKEV1Mode:            getString(ikeSaMap, "ikev1_mode"),
-				EncryptionAlgorithms: convertToStringSlice(ikeSaMap["encryption_algorithms"].([]interface{})),
-				HashAlgorithms:       convertToStringSlice(ikeSaMap["hash_algorithms"].([]interface{})),
-				DHGroups:             convertToStringSlice(ikeSaMap["dh_groups"].([]interface{})),
-				RekeyLifetime:        getString(ikeSaMap, "rekey_lifetime"),
-				PreSharedKey:         getString(ikeSaMap, "pre_shared_key"),
-				ReauthLifetime:       getString(ikeSaMap, "reauth_lifetime"),
-				DPDDelay:             getString(ikeSaMap, "dpd_delay"),
-				IKEV1DPDTimeout:      getString(ikeSaMap, "ikev1_dpd_timeout"),
-				IKEInitiator:         ikeInitiator,
-			}
-		}
-
-		// IPSECSA
-		if ipsecSaList, ok := teMap["ipsec_sa"].([]interface{}); ok && len(ipsecSaList) > 0 {
-			ipsecSaMap := ipsecSaList[0].(map[string]interface{})
-			tunnelEndpoint.IPSECSA = &IPSECSA{
-				EncryptionAlgorithms: convertToStringSlice(ipsecSaMap["encryption_algorithms"].([]interface{})),
-				DHGroups:             convertToStringSlice(ipsecSaMap["dh_groups"].([]interface{})),
-				RekeyLifetime:        getString(ipsecSaMap, "rekey_lifetime"),
-			}
-		}
-
-		// LocalIdentifier
-		if localIdList, ok := teMap["local_identifier"].([]interface{}); ok && len(localIdList) > 0 {
-			localIdMap := localIdList[0].(map[string]interface{})
-			tunnelEndpoint.LocalIdentifier = Identifier{
-				Type:  localIdMap["type"].(string),
-				Value: localIdMap["value"].(string),
-			}
-		}
-
-		// RemoteIdentifier
-		if remoteIdList, ok := teMap["remote_identifier"].([]interface{}); ok && len(remoteIdList) > 0 {
-			remoteIdMap := remoteIdList[0].(map[string]interface{})
-			tunnelEndpoint.RemoteIdentifier = Identifier{
-				Type:  remoteIdMap["type"].(string),
-				Value: remoteIdMap["value"].(string),
-			}
-		}
-
-		// Append the new TunnelEndpoint struct to the slice in TunnelSpec
-		tunnel.Spec.TunnelEndpoints = append(tunnel.Spec.TunnelEndpoints, tunnelEndpoint)
-	}
-
-	// Convert the GO Struct into JSON
+	// Convert the Tunnel struct into JSON for the API request
 	jsonBytes, err := json.Marshal(tunnel)
 	if err != nil {
 		return diag.FromErr(err)
 	}
 	log.Printf("[DEBUG] Request JSON: %s\n", jsonBytes)
 
+	// Make the HTTP POST request to create the tunnel
 	req, err := http.NewRequestWithContext(ctx, "POST", config.Server+"/configs/security/v1/tenant/default/ipsecpolicies", bytes.NewBuffer(jsonBytes))
 	if err != nil {
 		return diag.FromErr(err)
 	}
 
-	// Grab the cookie and send the request to the server and deal with errors
+	// Add the session cookie and send the request
 	req.AddCookie(&http.Cookie{Name: "sid", Value: config.SID})
 	response, err := client.Do(req)
 	if err != nil {
@@ -394,61 +366,19 @@ func resourceTunnelCreate(ctx context.Context, d *schema.ResourceData, m interfa
 	}
 	defer response.Body.Close()
 
+	// Handle the response from the server
 	if response.StatusCode != http.StatusOK {
 		bodyBytes, _ := io.ReadAll(response.Body)
 		errMsg := fmt.Sprintf("Failed to create Tunnel: HTTP %d %s: %s", response.StatusCode, response.Status, bodyBytes)
 		return diag.Errorf("Tunnel creation failed: %s", errMsg)
 	}
 
-	//Read the response from the server and then use this to populate the local Terraform state
+	// Read the response to get the tunnel ID and set it in the Terraform state
 	responseTunnel := &Tunnel{}
 	if err := json.NewDecoder(response.Body).Decode(responseTunnel); err != nil {
 		return diag.FromErr(err)
 	}
-
-	responseJSON, _ := json.MarshalIndent(responseTunnel, "", "  ")
-	log.Printf("[DEBUG] Response JSON: %s\n", responseJSON)
-
 	d.SetId(*responseTunnel.Meta.UUID)
-	d.Set("name", responseTunnel.Meta.Name)
-	d.Set("tenant", responseTunnel.Meta.Tenant)
-
-	/*
-		rules := make([]interface{}, len(responseTunnel.Spec.Rules))
-		for i, rule := range responseTunnel.Spec {
-			rules[i] = map[string]interface{}{
-				"name":                rule.Name,
-				"action":              rule.Action,
-				"description":         rule.Description,
-				"apps":                rule.Apps,
-				"from_ip_collections": rule.FromIPCollections,
-				"to_ip_collections":   rule.ToIPCollections,
-				"from_ip_addresses":   rule.FromIPAddresses,
-				"to_ip_addresses":     rule.ToIPAddresses,
-			}
-		}
-
-		if err := d.Set("spec", []interface{}{map[string]interface{}{
-			"attach_tenant":               responseTunnel.Spec.AttachTenant,
-			"rules":                       rules,
-			"priority":                    responseTunnel.Spec.Priority,
-			"policy_distribution_targets": responseTunnel.Spec.PolicyDistributionTargets,
-		}}); err != nil {
-			return diag.FromErr(err)
-		}
-		if err := d.Set("meta", []interface{}{map[string]interface{}{
-			"name":             responseTunnel.Meta.Name,
-			"tenant":           responseTunnel.Meta.Tenant,
-			"namespace":        responseTunnel.Meta.Namespace,
-			"generation_id":    responseTunnel.Meta.GenerationID,
-			"resource_version": responseTunnel.Meta.ResourceVersion,
-			"uuid":             responseTunnel.Meta.UUID,
-			"labels":           responseTunnel.Meta.Labels,
-			"self_link":        responseTunnel.Meta.SelfLink,
-		}}); err != nil {
-			return diag.FromErr(err)
-		}
-	*/
 
 	return nil
 }
@@ -484,14 +414,28 @@ func getString(data map[string]interface{}, key string) string {
 	return ""
 }
 
-func getBool(data map[string]interface{}, key string) *bool {
-	// Use GetOk to safely check for the presence of key
+// getBool retrieves a boolean from a map or returns false if the key is not found
+func getBool(data map[string]interface{}, key string) bool {
 	if val, ok := data[key]; ok {
-		// Check if the value is a bool and return a pointer to it
-		if b, ok := val.(bool); ok {
-			return &b
-		}
+		return val.(bool)
 	}
-	// Return nil if the key is not found or the value is not a bool
-	return nil
+	return false
+}
+
+func convertToStringSlice(input interface{}) []string {
+	var result []string
+	inputSlice, ok := input.([]interface{})
+	if !ok {
+		// handle the error accordingly
+		return result
+	}
+	for _, v := range inputSlice {
+		str, ok := v.(string)
+		if !ok {
+			// handle the error accordingly
+			continue
+		}
+		result = append(result, str)
+	}
+	return result
 }
