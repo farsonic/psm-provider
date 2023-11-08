@@ -305,7 +305,7 @@ func resourceTunnelCreate(ctx context.Context, d *schema.ResourceData, m interfa
 		Kind:       nil,
 		APIVersion: nil,
 		Meta: TunnelMeta{
-			Name:            d.Get("name").(string),
+			Name:            d.Get("policy_name").(string),
 			Tenant:          d.Get("tenant").(string),
 			Namespace:       nil,
 			GenerationID:    nil,
