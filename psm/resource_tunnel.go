@@ -41,9 +41,7 @@ func resourceTunnel() *schema.Resource {
 						},
 						"tenant": {
 							Type:     schema.TypeString,
-							Optional: true,
-							Default:  "default",
-							ForceNew: true,
+							Computed: true,
 						},
 						"namespace": {
 							Type:     schema.TypeString,
