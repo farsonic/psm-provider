@@ -21,6 +21,7 @@ terraform {
       version = "0.1.81" 
       source = "local/provider/psm"
   }
+ }
 }
 ```
 
