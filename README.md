@@ -151,7 +151,7 @@ locals {
       name   = "nosubnet"
       description = "nosubnet Network"
       department = "Development"
-      vlan   = 1119
+      vlan   = 1120
       subnet = ""
       vrf = "default"
     }
