@@ -24,6 +24,14 @@ func resourceVRF() *schema.Resource {
 				Required: true,
 				ForceNew: true,
 			},
+			"ingress_security_policy": {
+				Type:     schema.TypeString,
+				Optional: true,
+			},
+			"egress_security_policy": {
+				Type:     schema.TypeString,
+				Optional: true,
+			},
 		},
 	}
 }
@@ -69,7 +77,12 @@ func resourceVRFCreate(ctx context.Context, d *schema.ResourceData, m interface{
 	vrf.Meta.Tenant = "default"
 	vrf.Spec.Type = "unknown"
 	vrfName := d.Get("name").(string)
-
+	if v, ok := d.GetOk("ingress_security_policy"); ok {
+		vrf.Spec.IngressSecurityPolicy = []interface{}{v.(string)}
+	}
+	if v, ok := d.GetOk("egress_security_policy"); ok {
+		vrf.Spec.EgressSecurityPolicy = []interface{}{v.(string)}
+	}
 	if vrfName == "default" {
 		d.SetId("default")
 		return nil
