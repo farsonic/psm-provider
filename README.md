@@ -209,23 +209,23 @@ locals {
  filtered_networks = {for key, value in local.networks : key => value if value.subnet != ""}
 }
 
-resource "psm_vrf" "customerABC" { 
-  name = "CustomerXYZ"
+resource "psm_vrf" "vrfs" {
+  for_each = local.networks
+  name     = each.value.vrf
 }
-
 
 resource "psm_network" "network" {
   for_each = local.networks
   name     = each.value.name
   tenant   = each.value.vrf
   vlan_id  = each.value.vlan
+  depends_on = [psm_vrf.vrfs]
 }
 
 resource "psm_ipcollection" "ipcollections" {
   for_each = local.filtered_networks
   name     = each.value.name
   addresses = [each.value.subnet]
-
   depends_on = [psm_network.network]
 }
 
@@ -247,7 +247,6 @@ resource "psm_rules" "default_vrf_policy" {
       action              = rule.value.action
     }
   }
-
   depends_on = [psm_ipcollection.ipcollections]
 }
 ```
