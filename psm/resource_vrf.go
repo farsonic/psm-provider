@@ -17,12 +17,21 @@ func resourceVRF() *schema.Resource {
 	return &schema.Resource{
 		CreateContext: resourceVRFCreate,
 		ReadContext:   resourceVRFRead,
+		UpdateContext: resourceVRFUpdate,
 		DeleteContext: resourceVRFDelete,
 		Schema: map[string]*schema.Schema{
 			"name": {
 				Type:     schema.TypeString,
 				Required: true,
 				ForceNew: true,
+			},
+			"ingress_security_policy": {
+				Type:     schema.TypeString,
+				Optional: true,
+			},
+			"egress_security_policy": {
+				Type:     schema.TypeString,
+				Optional: true,
 			},
 		},
 	}
@@ -69,7 +78,12 @@ func resourceVRFCreate(ctx context.Context, d *schema.ResourceData, m interface{
 	vrf.Meta.Tenant = "default"
 	vrf.Spec.Type = "unknown"
 	vrfName := d.Get("name").(string)
-
+	if v, ok := d.GetOk("ingress_security_policy"); ok {
+		vrf.Spec.IngressSecurityPolicy = []interface{}{v.(string)}
+	}
+	if v, ok := d.GetOk("egress_security_policy"); ok {
+		vrf.Spec.EgressSecurityPolicy = []interface{}{v.(string)}
+	}
 	if vrfName == "default" {
 		d.SetId("default")
 		return nil
@@ -157,6 +171,68 @@ func resourceVRFRead(ctx context.Context, d *schema.ResourceData, m interface{})
 	d.Set("api_version", vrf.APIVersion)
 
 	return nil
+}
+
+func resourceVRFUpdate(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
+
+	config := m.(*Config)
+	client := config.Client()
+
+	url := config.Server + "/configs/network/v1/tenant/default/virtualrouters/" + d.Get("name").(string)
+
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		return diag.FromErr(err)
+	}
+	req.AddCookie(&http.Cookie{Name: "sid", Value: config.SID})
+
+	resp, err := client.Do(req)
+
+	defer resp.Body.Close()
+
+	vrfCurrent := &VRF{}
+
+	if d.HasChange("ingress_security_policy") {
+		if val, ok := d.GetOk("ingress_security_policy"); ok {
+			newIngressPolicy := val.(string)
+			vrfCurrent.Spec.IngressSecurityPolicy = []interface{}{newIngressPolicy}
+		} else {
+			vrfCurrent.Spec.IngressSecurityPolicy = nil
+		}
+	}
+
+	if d.HasChange("egress_security_policy") {
+		if val, ok := d.GetOk("egress_security_policy"); ok {
+			newEgressPolicy := val.(string)
+			vrfCurrent.Spec.EgressSecurityPolicy = []interface{}{newEgressPolicy}
+		} else {
+			vrfCurrent.Spec.EgressSecurityPolicy = nil
+		}
+	}
+
+	jsonBytes, err := json.Marshal(vrfCurrent)
+	if err != nil {
+		return diag.FromErr(err)
+	}
+
+	reqUpdate, err := http.NewRequestWithContext(ctx, "PUT", url, bytes.NewBuffer(jsonBytes))
+	if err != nil {
+		return diag.FromErr(err)
+	}
+
+	reqUpdate.AddCookie(&http.Cookie{Name: "sid", Value: config.SID})
+
+	respUpdate, err := client.Do(reqUpdate)
+	if err != nil {
+		return diag.FromErr(err)
+	}
+	defer respUpdate.Body.Close()
+
+	if respUpdate.StatusCode != http.StatusOK {
+		log.Printf("[DEBUG] Network updated successfully")
+	}
+
+	return resourceVRFRead(ctx, d, m)
 }
 
 func resourceVRFDelete(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
