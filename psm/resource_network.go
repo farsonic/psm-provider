@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -39,6 +38,11 @@ func resourceNetwork() *schema.Resource {
 				Default:  0,
 				ForceNew: true,
 			},
+			"virtual_router": {
+				Type:     schema.TypeString,
+				Optional: true,
+				ForceNew: true,
+			},
 			"ingress_security_policy": {
 				Type:     schema.TypeString,
 				Optional: true,
@@ -47,45 +51,64 @@ func resourceNetwork() *schema.Resource {
 				Type:     schema.TypeString,
 				Optional: true,
 			},
+			"connection_tracking_mode": {  
+				Type:     schema.TypeString,  
+				Optional: true,  
+				ForceNew: false,  
+			},
+			"allow_session_reuse": {  
+				Type:     schema.TypeString,  
+				Optional: true,  
+				ForceNew: false,  
+			},
+			"service_bypass": {  
+				Type:     schema.TypeBool, 
+				Optional: true,
+				ForceNew: false,
+			},
 		},
 	}
 }
 
 type Network struct {
 	Meta struct {
-		Kind            interface{} `json:"kind" default:"null`
-		APIVersion      interface{} `json:"api-version" default:"null`
+		Kind            interface{} `json:"kind" default:"null"`
+		APIVersion      interface{} `json:"api-version" default:"null"`
 		Name            string      `json:"name"`
 		Tenant          string      `json:"tenant"`
-		Namespace       interface{} `json:"namespace" default:"null`
+		Namespace       interface{} `json:"namespace" default:"null"`
 		GenerationID    interface{} `json:"generation-id default:"null"`
-		ResourceVersion interface{} `json:"resource-version" default:"null`
-		UUID            string      `json:"uuid" default:"null`
-		Labels          interface{} `json:"labels" default:"null`
-		SelfLink        interface{} `json:"self-link" default:"null`
-		DisplayName     interface{} `json:"display-name" default:"null`
+		ResourceVersion interface{} `json:"resource-version" default:"null"`
+		UUID            string      `json:"uuid" default:"null"`
+		Labels          interface{} `json:"labels" default:"null"`
+		SelfLink        interface{} `json:"self-link" default:"null"`
+		DisplayName     interface{} `json:"display-name" default:"null"`
 	}
 	Spec struct {
 		Type                  string        `json:"type" default:"bridged`
-		Ipv4Subnet            interface{}   `json:"ipv4-subnet" default:"null`
-		Ipv4Gateway           interface{}   `json:"ipv4-gateway" default:"null`
-		Ipv6Subnet            interface{}   `json:"ipv6-subnet" default:"null`
-		Ipv6Gateway           interface{}   `json:"ipv6-gateway" default:"null`
+		Ipv4Subnet            interface{}   `json:"ipv4-subnet" default:"null"`
+		Ipv4Gateway           interface{}   `json:"ipv4-gateway" default:"null"`
+		Ipv6Subnet            interface{}   `json:"ipv6-subnet" default:"null"`
+		Ipv6Gateway           interface{}   `json:"ipv6-gateway" default:"null"`
 		VlanID                int           `json:"vlan-id"`
-		VxlanVni              interface{}   `json:"vxlan-vni" default:"null`
-		VirtualRouter         string        `json:"virtual-router"`
-		IpamPolicy            interface{}   `json:"ipam-policy" default:"null`
+		VxlanVni              interface{}   `json:"vxlan-vni" default:"null"`
+		VirtualRouter         string        `json:"virtual-router" default:"default"`
+		IpamPolicy            interface{}   `json:"ipam-policy" default:"null"`
 		Orchestrators         []interface{} `json:"orchestrators"`
-		IngressSecurityPolicy []interface{} `json:"ingress-security-policy" default:"null`
-		EgressSecurityPolicy  []interface{} `json:"egress-security-policy" default:"null`
+		IngressSecurityPolicy []interface{} `json:"ingress-security-policy" default:"null"`
+		EgressSecurityPolicy  []interface{} `json:"egress-security-policy" default:"null"`
 		FirewallProfile       struct {
 			MaximumCpsPerDistributedServicesEntity      int `json:"maximum-cps-per-distributed-services-entity" default:"-1"`
 			MaximumSessionsPerDistributedServicesEntity int `json:"maximum-sessions-per-distributed-services-entity default:"-1"`
 		} `json:"firewall-profile"`
-		SelectVlanOrIpv4  int         `json:"selectVlanOrIpv4" default:"1"`
-		SelectCPS         int         `json:"selectCPS" default:"-1"`
-		SelectSessions    int         `json:"selectSessions" default:"-1"`
-		RouteImportExport interface{} `json:"route-import-export" default:"null"`
+		SelectVlanOrIpv4      int         `json:"selectVlanOrIpv4" default:"1"`
+		SelectCPS             int         `json:"selectCPS" default:"-1"`
+		SelectSessions        int         `json:"selectSessions" default:"-1"`
+		RouteImportExport     interface{} `json:"route-import-export" default:"null"`
+		VRF                   string	  `json:"vrf" default:"default"`
+		ConnectionTracking    string      `json:"connection-tracking-mode" default:"inherit from vrf"`
+		AllowSessionReuse     string      `json:"allow-session-reuse" default:"inherit from vrf"`
+		ServiceBypass     	  bool        `json:"service-bypass" default:"false"`
 	}
 }
 
@@ -99,7 +122,10 @@ func resourceNetworkCreate(ctx context.Context, d *schema.ResourceData, m interf
 	network.Spec.VlanID = d.Get("vlan_id").(int)
 	network.Spec.Type = "bridged"
 	network.Meta.Namespace = "default"
-	network.Spec.VirtualRouter = d.Get("tenant").(string)
+	network.Spec.VirtualRouter = d.Get("virtual_router").(string)
+	network.Spec.ConnectionTracking = d.Get("connection_tracking_mode").(string)  
+	network.Spec.AllowSessionReuse = d.Get("allow_session_reuse").(string)
+	network.Spec.ServiceBypass = d.Get("service_bypass").(bool)
 
 	// Check if the ingress_security_policy and egress_security_policy values are provided and set them
 	if v, ok := d.GetOk("ingress_security_policy"); ok {
@@ -132,7 +158,7 @@ func resourceNetworkCreate(ctx context.Context, d *schema.ResourceData, m interf
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		bodyBytes, _ := io.ReadAll(resp.Body)
+		bodyBytes, _ := ioutil.ReadAll(resp.Body)
 		errMsg := fmt.Sprintf("failed to create network: HTTP %d %s: %s", resp.StatusCode, resp.Status, bodyBytes)
 		// Added for additional debug if the JSON we send to the PSM server is invalid.
 		return diag.Diagnostics{
@@ -232,6 +258,15 @@ func resourceNetworkUpdate(ctx context.Context, d *schema.ResourceData, m interf
 		return diag.FromErr(err)
 	}
 
+	if d.HasChange("virtual_router") {  
+		if val, ok := d.GetOk("virtual_router"); ok {  
+			newVirtualRouter := val.(string)  
+			networkCurrent.Spec.VirtualRouter = newVirtualRouter  
+		} else {  
+			networkCurrent.Spec.VirtualRouter = "default" // default value  
+		}  
+	}
+
 	if d.HasChange("ingress_security_policy") {
 		if val, ok := d.GetOk("ingress_security_policy"); ok {
 			newIngressPolicy := val.(string)
@@ -248,6 +283,28 @@ func resourceNetworkUpdate(ctx context.Context, d *schema.ResourceData, m interf
 		} else {
 			networkCurrent.Spec.EgressSecurityPolicy = nil
 		}
+	}
+
+	if d.HasChange("connection_tracking_mode") {  
+		if val, ok := d.GetOk("connection_tracking_mode"); ok {  
+			newConnectionTrackingMode := val.(string)  
+			networkCurrent.Spec.ConnectionTracking = newConnectionTrackingMode  
+		} else {  
+			networkCurrent.Spec.ConnectionTracking = "inherit from vrf" // default value  
+		}  
+	}  
+	  
+	if d.HasChange("allow_session_reuse") {  
+		if val, ok := d.GetOk("allow_session_reuse"); ok {  
+			newAllowSessionReuse := val.(string)  
+			networkCurrent.Spec.AllowSessionReuse = newAllowSessionReuse  
+		} else {  
+			networkCurrent.Spec.AllowSessionReuse = "inherit from vrf" // default value  
+		}  
+	}
+
+	if d.HasChange("service_bypass") {
+		networkCurrent.Spec.ServiceBypass = d.Get("service_bypass").(bool)
 	}
 
 	jsonBytes, err := json.Marshal(networkCurrent)
