@@ -114,7 +114,7 @@ func resourceApps() *schema.Resource {
 							Default:  "60s",
 						},
 						"alg": {
-							Type:     schema.TypeList,
+							Type:     schema.TypeSet,
 							Optional: true,
 							Elem: &schema.Resource{
 								Schema: map[string]*schema.Schema{
@@ -242,49 +242,12 @@ type App struct {
 	Spec struct {
 		ProtoPorts []ProtoPorts `json:"proto-ports"`
 		Apps       []string     `json:"apps"`
-		ALG        []ALG        `json:"alg"`
 	} `json:"spec"`
 }
 
 type ProtoPorts struct {
 	Protocol string `json:"protocol"`
 	Ports    string `json:"ports"`
-}
-
-type ALG struct {
-	AlgType string   `json:"type"`
-	ICMP    ICMP     `json:"icmp"`
-	DNS     DNS      `json:"dns"`
-	FTP     FTP      `json:"ftp"`
-	SunRPC  []SunRPC `json:"sunrpc"`
-	MSRPC   []MSRPC  `json:"msrpc"`
-}
-
-type ICMP struct {
-	Type string `json:"type"`
-	Code string `json:"code"`
-}
-
-type DNS struct {
-	DropMultiQuestionPackets   bool   `json:"drop_multi_question_packets"`
-	DropLargeDomainNamePackets bool   `json:"drop_large_domain_name_packets"`
-	DropLongLabelPackets       bool   `json:"drop_long_label_packets"`
-	MaxMessageLength           int64  `json:"max_message_length"`
-	QueryResponseTimeout       string `json:"query-response-timeout"`
-}
-
-type FTP struct {
-	AllowMismatchIPAddress bool `json:"allow-mismatch-ip-address"`
-}
-
-type SunRPC struct {
-	ProgramID string `json:"program-id"`
-	Timeout   string `json:"timeout"`
-}
-
-type MSRPC struct {
-	ProgramUUID string `json:"program-uuid"`
-	Timeout     string `json:"timeout"`
 }
 
 func resourceAppsCreate(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
@@ -318,19 +281,6 @@ func resourceAppsCreate(ctx context.Context, d *schema.ResourceData, m interface
 		if apps, ok := specMap["apps"].([]interface{}); ok {
 			for _, a := range apps {
 				app.Spec.Apps = append(app.Spec.Apps, a.(string))
-			}
-		}
-		if alg, ok := specMap["alg"].([]interface{}); ok {
-			for _, a := range alg {
-				algMap := a.(map[string]interface{})
-				app.Spec.ALG = append(app.Spec.ALG, ALG{
-					AlgType: algMap["type"].(string),
-					ICMP:    parseICMP(algMap["icmp"].(map[string]interface{}))[0],
-					DNS:     parseDNS(algMap["dns"].(map[string]interface{})),
-					FTP:     parseFTP(algMap["ftp"].(map[string]interface{}))[0],
-					SunRPC:  parseSunRPC(algMap["sunrpc"].([]interface{})),
-					MSRPC:   parseMSRPC(algMap["msrpc"].([]interface{})),
-				})
 			}
 		}
 
@@ -516,104 +466,6 @@ func resourceAppsUpdate(ctx context.Context, d *schema.ResourceData, m interface
 	return append(diag.Diagnostics{}, resourceAppsRead(ctx, d, m)...)
 }
 
-// func resourceAppsUpdate(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
-// 	config := m.(*Config)
-// 	client := config.Client()
-// 	// Get the current state of the app
-// 	url := config.Server + "/configs/security/v1/tenant/default/apps/" + d.Id()
-// 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
-// 	if err != nil {
-// 		return diag.FromErr(err)
-// 	}
-// 	req.AddCookie(&http.Cookie{Name: "sid", Value: config.SID})
-// 	resp, err := client.Do(req)
-// 	if err != nil {
-// 		return diag.FromErr(err)
-// 	}
-// 	defer resp.Body.Close()
-// 	if resp.StatusCode != http.StatusOK {
-// 		return diag.Errorf("failed to read app: HTTP %s", resp.Status)
-// 	}
-// 	app := &App{}
-// 	if err := json.NewDecoder(resp.Body).Decode(app); err != nil {
-// 		return diag.FromErr(err)
-// 	}
-// 	if d.HasChange("spec.proto_ports") {
-// 		app.Spec.ProtoPorts = nil // Clear the existing ports
-// 		if protoPorts, ok := d.Get("spec.proto_ports").([]interface{}); ok {
-// 			for _, p := range protoPorts {
-// 				port := p.(map[string]interface{})
-// 				protoPort := ProtoPorts{}
-// 				if protocol, ok := port["protocol"].(string); ok {
-// 					protoPort.Protocol = protocol
-// 				} else {
-// 					// `port["protocol"]` is not a string
-// 				}
-
-// 				if ports, ok := port["ports"].(string); ok {
-// 					protoPort.Ports = ports
-// 					app.Spec.ProtoPorts = append(app.Spec.ProtoPorts, protoPort)
-// 				} else {
-// 					// `port["ports"]` is not a string
-// 				}
-// 			}
-// 		}
-// 	}
-
-// 	if meta, ok := d.Get("meta").([]interface{}); ok && len(meta) > 0 {
-// 		metaMap := meta[0].(map[string]interface{})
-// 		if name, ok := metaMap["name"].(string); ok {
-// 			app.Meta.Name = name
-// 		}
-// 		if displayName, ok := metaMap["display_name"].(string); ok {
-// 			app.Meta.DisplayName = displayName
-// 		}
-// 	}
-
-// 	if d.HasChange("spec.apps") {
-// 		app.Spec.Apps = nil
-// 		for _, a := range d.Get("spec.apps").([]interface{}) {
-// 			app.Spec.Apps = append(app.Spec.Apps, a.(string))
-// 		}
-// 	}
-
-// 	jsonBytes, err := json.Marshal(app)
-// 	if err != nil {
-// 		return diag.FromErr(err)
-// 	}
-
-// 	// Log the request details
-// 	log.Printf("[DEBUG] Request method: %s", req.Method)
-// 	log.Printf("[DEBUG] Request URL: %s", req.URL.String())
-// 	log.Printf("[DEBUG] Request body: %s", jsonBytes)
-// 	fmt.Println(string(jsonBytes))
-
-// 	req, err = http.NewRequestWithContext(ctx, "PUT", config.Server+"/configs/security/v1/tenant/default/apps/"+d.Id(), bytes.NewBuffer(jsonBytes))
-// 	if err != nil {
-// 		return diag.FromErr(err)
-// 	}
-
-// 	req.AddCookie(&http.Cookie{Name: "sid", Value: config.SID})
-
-// 	resp, err = client.Do(req)
-// 	if err != nil {
-// 		return diag.FromErr(err)
-// 	}
-// 	defer resp.Body.Close()
-
-// 	bodyBytes, _ := ioutil.ReadAll(resp.Body)
-// 	if resp.StatusCode != http.StatusOK {
-// 		return diag.Errorf("failed to update app: HTTP %d %s: %s", resp.StatusCode, resp.Status, bodyBytes)
-// 	}
-
-// 	// Log the request details
-// 	log.Printf("[DEBUG] Request method: %s", req.Method)
-// 	log.Printf("[DEBUG] Request URL: %s", req.URL.String())
-// 	log.Printf("[DEBUG] Request body: %s", jsonBytes)
-
-// 	return resourceAppsRead(ctx, d, m)
-// }
-
 func resourceAppsDelete(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
 	config := m.(*Config)
 	client := config.Client()
@@ -642,69 +494,5 @@ func resourceAppsDelete(ctx context.Context, d *schema.ResourceData, m interface
 	// Clear the resource ID as it's been deleted from the PSM server.
 	d.SetId("")
 
-	return nil
-}
-
-func parseICMP(data interface{}) []ICMP {
-	if icmpList, ok := data.([]interface{}); ok {
-		icmps := make([]ICMP, len(icmpList))
-		for i, icmpData := range icmpList {
-			icmp := ICMP{}
-			if icmpMap, ok := icmpData.(map[string]interface{}); ok {
-				if icmpType, ok := icmpMap["type"].(string); ok {
-					icmp.Type = icmpType
-				}
-				if icmpCode, ok := icmpMap["code"].(string); ok {
-					icmp.Code = icmpCode
-				}
-			}
-			icmps[i] = icmp
-		}
-		return icmps
-	}
-	return nil
-}
-
-func parseDNS(dns map[string]interface{}) DNS {
-	return DNS{
-		DropMultiQuestionPackets:   dns["drop_multi_question_packets"].(bool),
-		DropLargeDomainNamePackets: dns["drop_large_domain_name_packets"].(bool),
-		DropLongLabelPackets:       dns["drop_long_label_packets"].(bool),
-		MaxMessageLength:           dns["max_message_length"].(int64),
-		QueryResponseTimeout:       dns["query-response-timeout"].(string),
-	}
-}
-
-func parseFTP(data interface{}) []FTP {
-	if ftpMap, ok := data.(map[string]interface{}); ok {
-		ftp := FTP{}
-		if allowMismatchIPAddress, ok := ftpMap["allow_mismatch_ip_address"].(bool); ok {
-			ftp.AllowMismatchIPAddress = allowMismatchIPAddress
-		}
-		return []FTP{ftp}
-	}
-	return nil
-}
-
-func parseSunRPC(sunrpc []interface{}) []SunRPC {
-	var sunrpcs []SunRPC
-	for _, s := range sunrpc {
-		sunrpcMap := s.(map[string]interface{})
-		sunrpcs = append(sunrpcs, SunRPC{
-			ProgramID: sunrpcMap["program-id"].(string),
-			Timeout:   sunrpcMap["timeout"].(string),
-		})
-	}
-	return sunrpcs
-}
-
-func parseMSRPC(data interface{}) []MSRPC {
-	if msrpcMap, ok := data.(map[string]interface{}); ok {
-		msrpc := MSRPC{}
-		if programUUID, ok := msrpcMap["program_uuid"].(string); ok {
-			msrpc.ProgramUUID = programUUID
-		}
-		return []MSRPC{msrpc}
-	}
 	return nil
 }
