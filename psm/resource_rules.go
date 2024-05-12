@@ -25,19 +25,19 @@ func resourceRules() *schema.Resource {
 			"policy_name": {
 				Type:     schema.TypeString,
 				Required: true,
-				ForceNew: true,
+				//ForceNew: false,
 			},
 			"tenant": {
 				Type:     schema.TypeString,
 				Optional: true,
 				Default:  "default",
-				ForceNew: true,
+				//ForceNew: true,
 			},
 			"policy_distribution_target": {
 				Type:     schema.TypeString,
 				Optional: true,
 				Default:  "default",
-				ForceNew: true,
+				//ForceNew: true,
 			},
 			"meta": {
 				Type:     schema.TypeSet,
@@ -115,7 +115,7 @@ func resourceRules() *schema.Resource {
 									"description": {
 										Type:     schema.TypeString,
 										Optional: true,
-										ForceNew: true,
+										//ForceNew: true,
 									},
 									"apps": {
 										Type:     schema.TypeList,
@@ -149,13 +149,13 @@ func resourceRules() *schema.Resource {
 							Type:     schema.TypeInt,
 							Optional: true,
 							Default:  0,
-							ForceNew: false,
+							//ForceNew: false,
 						},
 						"policy_distribution_targets": {
 							Type:     schema.TypeList,
 							Optional: true,
 							Elem:     &schema.Schema{Type: schema.TypeString},
-							ForceNew: true,
+							//ForceNew: true,
 						},
 					},
 				},
@@ -163,18 +163,18 @@ func resourceRules() *schema.Resource {
 			"rule": {
 				Type:     schema.TypeList,
 				Optional: true,
-				ForceNew: true,
+				ForceNew: false,
 				Elem: &schema.Resource{
 					Schema: map[string]*schema.Schema{
 						"rule_name": {
 							Type:     schema.TypeString,
 							Optional: true,
-							ForceNew: true,
+							//ForceNew: false,
 						},
 						"description": {
 							Type:     schema.TypeString,
 							Optional: true,
-							ForceNew: true,
+							//ForceNew: true,
 						},
 						"from_ip_collections": {
 							Type:     schema.TypeList,
@@ -200,12 +200,12 @@ func resourceRules() *schema.Resource {
 							Type:     schema.TypeList,
 							Elem:     &schema.Schema{Type: schema.TypeString},
 							Optional: true,
-							ForceNew: true,
+							//ForceNew: true,
 						},
 						"action": {
 							Type:     schema.TypeString,
 							Optional: true,
-							ForceNew: true,
+							//ForceNew: true,
 							//ValidateFunc: validateAction,
 						},
 					},
