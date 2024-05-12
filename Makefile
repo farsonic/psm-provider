@@ -3,7 +3,7 @@ HOSTNAME=local
 NAMESPACE=provider
 NAME=psm
 BINARY=terraform-provider-${NAME}
-VERSION=0.1.119
+VERSION=0.1.120
 OS_ARCH ?= darwin_arm64 # Default OS_ARCH, can be overridden by an environment variable
 
 # Options: darwin_arm64, linux_amd64, windows_amd64

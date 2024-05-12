@@ -118,7 +118,7 @@ func resourceIPCollectionUpdate(ctx context.Context, d *schema.ResourceData, m i
 	}
 	if ipcollections, ok := d.GetOk("ipcollections"); ok {
 		for _, addr := range ipcollections.([]interface{}) {
-			ipCollection.Spec.Addresses = append(ipCollection.Spec.Ipcollections, addr.(string))
+			ipCollection.Spec.Ipcollections = append(ipCollection.Spec.Ipcollections, addr.(string))
 		}
 	}
 
