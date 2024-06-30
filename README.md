@@ -169,6 +169,162 @@ resource "psm_syslog_export_policy" "policy01" {
 
 Binding the export policy is currently done manually via the DSS menu on PSM.
 
+### Apps
+
+Apps can be used inside Security Policies for easier handling. They can be nested up to five levels. 
+They can be built simply based on tcp / udp ports:
+
+```
+resource "psm_app" "app" {      
+  display_name = "example_app"      
+      
+  spec {      
+    proto_ports {      
+      protocol = "tcp"      
+      ports    = "8080,9090"      
+    }     
+  }      
+}    
+```
+
+Or more complex ones including other apps as nested objects:
+
+```
+resource "psm_app" "app" {
+  display_name = "example_app"
+      
+  spec {
+    proto_ports {
+      protocol = "tcp"
+      ports    = "7080,8080,8090-8092"
+    }
+    proto_ports {
+      protocol = "udp"
+      ports    = "5600-5800"
+    }
+    apps    = ["IMAP", "IMAPS"]
+  }
+}
+
+```
+ALGs (Application Layer Gateway) can be used to define Applications beside L3 / L4 based information
+
+```
+resource "psm_app" "dns_alg" {
+  display_name = "dns_alg_test"
+
+  spec {
+    proto_ports {
+      protocol = "udp"
+      ports    = "53,5353"
+    }
+    alg {
+      type = "dns"
+      dns {
+        drop_multi_question_packets    = true
+        drop_long_label_packets        = true
+        drop_large_domain_name_packets = false
+        max_message_length             = 512
+      }
+    }
+  }
+}
+
+resource "psm_app" "icmp_alg" {
+  display_name = "icmp_alg_test"
+
+  spec {
+    alg {
+      type = "icmp"
+      icmp {
+        type = "8"
+        code = "0"
+      }
+    }
+  }
+}
+
+resource "psm_app" "ftp_alg" {
+  display_name = "ftp_alg_test"
+
+  spec {
+    proto_ports {
+      protocol = "tcp"
+      ports    = "21"
+    }
+    alg {
+      type = "ftp"
+      ftp {
+        allow_mismatch_ip_address = true
+      }
+    }
+  }
+}
+
+resource "psm_app" "sunrpc_alg" {
+  display_name = "sunrpc_alg_test"
+
+  spec {
+    proto_ports {
+      protocol = "tcp"
+      ports    = "111"
+    }
+    timeout = "1h30m"
+    alg {
+      type = "sunrpc"
+      sunrpc {
+        program_id = "10024"
+      }
+    }
+  }
+}
+
+resource "psm_app" "msrpc_alg" {
+  display_name = "msrpc_alg_test"
+
+  spec {
+    proto_ports {
+      protocol = "tcp"
+      ports    = "135"
+    }
+    timeout = "1h30m"
+    alg {
+      type = "msrpc"
+      msrpc {
+        program_uuid = "a4f1db00-ca47-1067-b31f-00dd010662da"
+      }
+    }
+  }
+}
+
+resource "psm_app" "tftp_alg" {
+  display_name = "alg_tftp"
+  
+  spec {
+    proto_ports {
+      protocol = "udp"
+      ports    = "69"
+    }
+    alg {
+      type = "tftp"
+    }
+  }
+}
+
+resource "psm_app" "rtsp_alg" {
+  display_name = "alg_rtsp"
+  
+  spec {
+    proto_ports {
+      protocol = "tcp"
+      ports    = "554"
+    }
+    alg {
+      type = "rtsp"
+    }
+  }
+}
+```
 
 ### Orchestrator / Hypervisor Integration
 
