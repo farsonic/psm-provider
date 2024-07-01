@@ -13,12 +13,16 @@ type SwitchName string
 func Provider() *schema.Provider {
 	return &schema.Provider{
 		ResourcesMap: map[string]*schema.Resource{
-			"psm_network":      resourceNetwork(),
-			"psm_workload":     resourceWorkload(),
-			"psm_rules":        resourceRules(),
-			"psm_vrf":          resourceVRF(),
-			"psm_ipcollection": resourceIPCollection(),
-			"psm_tunnel":       resourceTunnel(),
+			"psm_network":              resourceNetwork(),
+			"psm_workload":             resourceWorkload(),
+			"psm_rules":                resourceRules(),
+			"psm_vrf":                  resourceVRF(),
+			"psm_ipcollection":         resourceIPCollection(),
+			"psm_orchestrator":         resourceOrchestrator(),
+			"psm_workloadgroup":        resourceWorkloadGroup(),
+			"psm_flow_export_policy":   resourceFlowExportPolicy(),
+			"psm_syslog_export_policy": resourceSyslogPolicy(),
+			"psm_app":                  resourceApps(),
 		},
 		Schema: map[string]*schema.Schema{
 			"user": &schema.Schema{
