@@ -177,7 +177,6 @@ They can be built simply based on tcp / udp ports:
 ```
 resource "psm_app" "app" {      
   display_name = "example_app"      
-      
   spec {      
     proto_ports {      
       protocol = "tcp"      
@@ -192,7 +191,6 @@ Or more complex ones including other apps as nested objects:
 ```
 resource "psm_app" "app" {
   display_name = "example_app"
-      
   spec {
     proto_ports {
       protocol = "tcp"
@@ -212,7 +210,6 @@ ALGs (Application Layer Gateway) can be used to define Applications beside L3 / 
 ```
 resource "psm_app" "dns_alg" {
   display_name = "dns_alg_test"
-
   spec {
     proto_ports {
       protocol = "udp"
@@ -232,7 +229,6 @@ resource "psm_app" "dns_alg" {
 
 resource "psm_app" "icmp_alg" {
   display_name = "icmp_alg_test"
-
   spec {
     alg {
       type = "icmp"
@@ -246,7 +242,6 @@ resource "psm_app" "icmp_alg" {
 
 resource "psm_app" "ftp_alg" {
   display_name = "ftp_alg_test"
-
   spec {
     proto_ports {
       protocol = "tcp"
@@ -263,7 +258,6 @@ resource "psm_app" "ftp_alg" {
 
 resource "psm_app" "sunrpc_alg" {
   display_name = "sunrpc_alg_test"
-
   spec {
     proto_ports {
       protocol = "tcp"
@@ -281,7 +275,6 @@ resource "psm_app" "sunrpc_alg" {
 
 resource "psm_app" "msrpc_alg" {
   display_name = "msrpc_alg_test"
-
   spec {
     proto_ports {
       protocol = "tcp"
@@ -299,7 +292,6 @@ resource "psm_app" "msrpc_alg" {
 
 resource "psm_app" "tftp_alg" {
   display_name = "alg_tftp"
-  
   spec {
     proto_ports {
       protocol = "udp"
@@ -313,7 +305,6 @@ resource "psm_app" "tftp_alg" {
 
 resource "psm_app" "rtsp_alg" {
   display_name = "alg_rtsp"
-  
   spec {
     proto_ports {
       protocol = "tcp"
