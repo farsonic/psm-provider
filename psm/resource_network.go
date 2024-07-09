@@ -51,18 +51,18 @@ func resourceNetwork() *schema.Resource {
 				Type:     schema.TypeString,
 				Optional: true,
 			},
-			"connection_tracking_mode": {  
-				Type:     schema.TypeString,  
-				Optional: true,  
-				ForceNew: false,  
+			"connection_tracking_mode": {
+				Type:     schema.TypeString,
+				Optional: true,
+				ForceNew: false,
 			},
-			"allow_session_reuse": {  
-				Type:     schema.TypeString,  
-				Optional: true,  
-				ForceNew: false,  
+			"allow_session_reuse": {
+				Type:     schema.TypeString,
+				Optional: true,
+				ForceNew: false,
 			},
-			"service_bypass": {  
-				Type:     schema.TypeBool, 
+			"service_bypass": {
+				Type:     schema.TypeBool,
 				Optional: true,
 				ForceNew: false,
 			},
@@ -77,7 +77,7 @@ type Network struct {
 		Name            string      `json:"name"`
 		Tenant          string      `json:"tenant"`
 		Namespace       interface{} `json:"namespace" default:"null"`
-		GenerationID    interface{} `json:"generation-id default:"null"`
+		GenerationID    interface{} `json:"generation-id" default:"null"`
 		ResourceVersion interface{} `json:"resource-version" default:"null"`
 		UUID            string      `json:"uuid" default:"null"`
 		Labels          interface{} `json:"labels" default:"null"`
@@ -85,30 +85,30 @@ type Network struct {
 		DisplayName     interface{} `json:"display-name" default:"null"`
 	}
 	Spec struct {
-		Type                  string        `json:"type" default:"bridged`
 		Ipv4Subnet            interface{}   `json:"ipv4-subnet" default:"null"`
 		Ipv4Gateway           interface{}   `json:"ipv4-gateway" default:"null"`
 		Ipv6Subnet            interface{}   `json:"ipv6-subnet" default:"null"`
 		Ipv6Gateway           interface{}   `json:"ipv6-gateway" default:"null"`
-		VlanID                int           `json:"vlan-id"`
 		VxlanVni              interface{}   `json:"vxlan-vni" default:"null"`
-		VirtualRouter         string        `json:"virtual-router" default:"default"`
 		IpamPolicy            interface{}   `json:"ipam-policy" default:"null"`
 		Orchestrators         []interface{} `json:"orchestrators"`
 		IngressSecurityPolicy []interface{} `json:"ingress-security-policy" default:"null"`
 		EgressSecurityPolicy  []interface{} `json:"egress-security-policy" default:"null"`
 		FirewallProfile       struct {
 			MaximumCpsPerDistributedServicesEntity      int `json:"maximum-cps-per-distributed-services-entity" default:"-1"`
-			MaximumSessionsPerDistributedServicesEntity int `json:"maximum-sessions-per-distributed-services-entity default:"-1"`
+			MaximumSessionsPerDistributedServicesEntity int `json:"maximum-sessions-per-distributed-services-entity" default:"-1"`
 		} `json:"firewall-profile"`
-		SelectVlanOrIpv4      int         `json:"selectVlanOrIpv4" default:"1"`
-		SelectCPS             int         `json:"selectCPS" default:"-1"`
-		SelectSessions        int         `json:"selectSessions" default:"-1"`
-		RouteImportExport     interface{} `json:"route-import-export" default:"null"`
-		VRF                   string	  `json:"vrf" default:"default"`
-		ConnectionTracking    string      `json:"connection-tracking-mode" default:"inherit from vrf"`
-		AllowSessionReuse     string      `json:"allow-session-reuse" default:"inherit from vrf"`
-		ServiceBypass     	  bool        `json:"service-bypass" default:"false"`
+		RouteImportExport  interface{} `json:"route-import-export" default:"null"`
+		Type               string      `json:"type" default:"bridged"`
+		VirtualRouter      string      `json:"virtual-router" default:"default"`
+		VRF                string      `json:"vrf" default:"default"`
+		ConnectionTracking string      `json:"connection-tracking-mode" default:"inherit from vrf"`
+		AllowSessionReuse  string      `json:"allow-session-reuse" default:"inherit from vrf"`
+		VlanID             int         `json:"vlan-id"`
+		SelectVlanOrIpv4   int         `json:"selectVlanOrIpv4" default:"1"`
+		SelectCPS          int         `json:"selectCPS" default:"-1"`
+		SelectSessions     int         `json:"selectSessions" default:"-1"`
+		ServiceBypass      bool        `json:"service-bypass" default:"false"`
 	}
 }
 
@@ -123,7 +123,7 @@ func resourceNetworkCreate(ctx context.Context, d *schema.ResourceData, m interf
 	network.Spec.Type = "bridged"
 	network.Meta.Namespace = "default"
 	network.Spec.VirtualRouter = d.Get("virtual_router").(string)
-	network.Spec.ConnectionTracking = d.Get("connection_tracking_mode").(string)  
+	network.Spec.ConnectionTracking = d.Get("connection_tracking_mode").(string)
 	network.Spec.AllowSessionReuse = d.Get("allow_session_reuse").(string)
 	network.Spec.ServiceBypass = d.Get("service_bypass").(bool)
 
@@ -258,13 +258,13 @@ func resourceNetworkUpdate(ctx context.Context, d *schema.ResourceData, m interf
 		return diag.FromErr(err)
 	}
 
-	if d.HasChange("virtual_router") {  
-		if val, ok := d.GetOk("virtual_router"); ok {  
-			newVirtualRouter := val.(string)  
-			networkCurrent.Spec.VirtualRouter = newVirtualRouter  
-		} else {  
-			networkCurrent.Spec.VirtualRouter = "default" // default value  
-		}  
+	if d.HasChange("virtual_router") {
+		if val, ok := d.GetOk("virtual_router"); ok {
+			newVirtualRouter := val.(string)
+			networkCurrent.Spec.VirtualRouter = newVirtualRouter
+		} else {
+			networkCurrent.Spec.VirtualRouter = "default" // default value
+		}
 	}
 
 	if d.HasChange("ingress_security_policy") {
@@ -285,22 +285,22 @@ func resourceNetworkUpdate(ctx context.Context, d *schema.ResourceData, m interf
 		}
 	}
 
-	if d.HasChange("connection_tracking_mode") {  
-		if val, ok := d.GetOk("connection_tracking_mode"); ok {  
-			newConnectionTrackingMode := val.(string)  
-			networkCurrent.Spec.ConnectionTracking = newConnectionTrackingMode  
-		} else {  
-			networkCurrent.Spec.ConnectionTracking = "inherit from vrf" // default value  
-		}  
-	}  
-	  
-	if d.HasChange("allow_session_reuse") {  
-		if val, ok := d.GetOk("allow_session_reuse"); ok {  
-			newAllowSessionReuse := val.(string)  
-			networkCurrent.Spec.AllowSessionReuse = newAllowSessionReuse  
-		} else {  
-			networkCurrent.Spec.AllowSessionReuse = "inherit from vrf" // default value  
-		}  
+	if d.HasChange("connection_tracking_mode") {
+		if val, ok := d.GetOk("connection_tracking_mode"); ok {
+			newConnectionTrackingMode := val.(string)
+			networkCurrent.Spec.ConnectionTracking = newConnectionTrackingMode
+		} else {
+			networkCurrent.Spec.ConnectionTracking = "inherit from vrf" // default value
+		}
+	}
+
+	if d.HasChange("allow_session_reuse") {
+		if val, ok := d.GetOk("allow_session_reuse"); ok {
+			newAllowSessionReuse := val.(string)
+			networkCurrent.Spec.AllowSessionReuse = newAllowSessionReuse
+		} else {
+			networkCurrent.Spec.AllowSessionReuse = "inherit from vrf" // default value
+		}
 	}
 
 	if d.HasChange("service_bypass") {

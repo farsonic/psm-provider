@@ -313,7 +313,7 @@ func resourceOrchestratorUpdate(ctx context.Context, d *schema.ResourceData, m i
 	if err := json.NewDecoder(resp.Body).Decode(responseBody); err != nil {
 		return diag.FromErr(err)
 	}
-	log.Printf("[DEBUG] Response JSON: %s\n", responseBody)
+	log.Printf("[DEBUG] Response: %+v\n", responseBody)
 
 	// No changes to the resource data, so just call the Read function to sync the state
 	return resourceOrchestratorRead(ctx, d, m)

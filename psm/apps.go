@@ -791,20 +791,6 @@ func parseICMP(icmpMap map[string]interface{}) *ICMP {
 	}
 }
 
-// func parseDNS(dnsMap map[string]interface{}) *DNS {
-// 	dns := &DNS{
-// 		DropMultiQuestionPackets:   dnsMap["drop_multi_question_packets"].(bool),
-// 		DropLargeDomainNamePackets: dnsMap["drop_large_domain_name_packets"].(bool),
-// 		DropLongLabelPackets:       dnsMap["drop_long_label_packets"].(bool),
-// 	}
-
-// 	if v, ok := dnsMap["max_message_length"]; ok {
-// 		dns.MaxMessageLength = int64(v.(int))
-// 	}
-
-// 	return dns
-// }
-
 func parseFTP(ftpMap map[string]interface{}) *FTP {
 	return &FTP{
 		AllowMismatchIPAddress: ftpMap["allow_mismatch_ip_address"].(bool),

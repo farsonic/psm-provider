@@ -25,25 +25,25 @@ func Provider() *schema.Provider {
 			"psm_app":                  resourceApps(),
 		},
 		Schema: map[string]*schema.Schema{
-			"user": &schema.Schema{
+			"user": {
 				Description: "The username for the PSM Server",
 				Type:        schema.TypeString,
 				Required:    true,
 				DefaultFunc: schema.EnvDefaultFunc("API_USER", nil),
 			},
-			"password": &schema.Schema{
+			"password": {
 				Description: "The users password for the PSM Server",
 				Type:        schema.TypeString,
 				Required:    true,
 				DefaultFunc: schema.EnvDefaultFunc("API_PASSWORD", nil),
 			},
-			"server": &schema.Schema{
+			"server": {
 				Description: "The PSM server IP address or URL",
 				Type:        schema.TypeString,
 				Required:    true,
 				DefaultFunc: schema.EnvDefaultFunc("API_SERVER", nil),
 			},
-			"insecure": &schema.Schema{
+			"insecure": {
 				Description: "Skip SSL certificate verification.",
 				Type:        schema.TypeBool,
 				Optional:    true,
