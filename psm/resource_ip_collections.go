@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -19,6 +20,9 @@ func resourceIPCollection() *schema.Resource {
 		ReadContext:   resourceIPCollectionRead,
 		UpdateContext: resourceIPCollectionUpdate,
 		DeleteContext: resourceIPCollectionDelete,
+		Importer: &schema.ResourceImporter{
+			StateContext: resourceIPCollectionImport,
+		},
 		Schema: map[string]*schema.Schema{
 			"name": {
 				Type:     schema.TypeString,
@@ -131,6 +135,12 @@ func resourceIPCollectionRead(ctx context.Context, d *schema.ResourceData, m int
 	}
 	defer resp.Body.Close()
 
+	if resp.StatusCode == http.StatusNotFound {
+		// If the resource doesn't exist, remove it from the state
+		d.SetId("")
+		return nil
+	}
+
 	if resp.StatusCode != http.StatusOK {
 		return diag.Errorf("failed to read ip_collection: HTTP %s", resp.Status)
 	}
@@ -227,4 +237,20 @@ func resourceIPCollectionDelete(ctx context.Context, d *schema.ResourceData, m i
 	d.SetId("")
 
 	return nil
+}
+
+func resourceIPCollectionImport(ctx context.Context, d *schema.ResourceData, m interface{}) ([]*schema.ResourceData, error) {
+	// The ID passed will be the name of the IP collection
+	name := d.Id()
+
+	// Set the name in the ResourceData
+	d.Set("name", name)
+
+	// Call Read to populate the rest of the data
+	diags := resourceIPCollectionRead(ctx, d, m)
+	if diags.HasError() {
+		return nil, fmt.Errorf("failed to read imported IP collection: %v", diags)
+	}
+
+	return []*schema.ResourceData{d}, nil
 }
