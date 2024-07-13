@@ -20,6 +20,9 @@ func resourceApps() *schema.Resource {
 		ReadContext:   resourceAppsRead,
 		DeleteContext: resourceAppsDelete,
 		UpdateContext: resourceAppsUpdate,
+		Importer: &schema.ResourceImporter{
+			StateContext: resourceAppsImport,
+		},
 		Schema: map[string]*schema.Schema{
 			"kind": {
 				Type:     schema.TypeString,
@@ -456,6 +459,12 @@ func resourceAppsRead(ctx context.Context, d *schema.ResourceData, m interface{}
 	}
 	defer resp.Body.Close()
 
+	if resp.StatusCode == http.StatusNotFound {
+		// If the resource doesn't exist, remove it from the state
+		d.SetId("")
+		return nil
+	}
+
 	if resp.StatusCode != http.StatusOK {
 		return diag.Errorf("failed to read app: HTTP %s", resp.Status)
 	}
@@ -465,6 +474,12 @@ func resourceAppsRead(ctx context.Context, d *schema.ResourceData, m interface{}
 		return diag.FromErr(err)
 	}
 
+	// Set the fields in the state
+	d.Set("display_name", app.Meta.DisplayName)
+	d.Set("kind", app.Kind)
+	d.Set("api_version", app.APIVersion)
+
+	// Set meta
 	meta := map[string]interface{}{
 		"name":             app.Meta.Name,
 		"tenant":           app.Meta.Tenant,
@@ -475,13 +490,12 @@ func resourceAppsRead(ctx context.Context, d *schema.ResourceData, m interface{}
 		"labels":           app.Meta.Labels,
 		"self_link":        app.Meta.SelfLink,
 	}
-	d.Set("meta", []interface{}{meta})
+	if err := d.Set("meta", []interface{}{meta}); err != nil {
+		return diag.FromErr(err)
+	}
 
-	d.Set("display_name", app.Meta.DisplayName)
-	d.Set("kind", app.Kind)
-	d.Set("api_version", app.APIVersion)
-
-	spec := make(map[string]interface{})
+	// Set spec
+	spec := map[string]interface{}{}
 
 	protoPorts := make([]map[string]interface{}, len(app.Spec.ProtoPorts))
 	for i, pp := range app.Spec.ProtoPorts {
@@ -497,72 +511,71 @@ func resourceAppsRead(ctx context.Context, d *schema.ResourceData, m interface{}
 		algMap := map[string]interface{}{
 			"type": app.Spec.ALG.Type,
 		}
-		if app.Spec.ALG.ICMP != nil {
-			algMap["icmp"] = []interface{}{
-				map[string]interface{}{
-					"type": app.Spec.ALG.ICMP.Type,
-					"code": app.Spec.ALG.ICMP.Code,
-				},
-			}
-		}
-		if app.Spec.ALG != nil && app.Spec.ALG.DNS != nil {
-			dnsMap := map[string]interface{}{}
-			if app.Spec.ALG.DNS.DropMultiQuestionPackets {
-				dnsMap["drop_multi_question_packets"] = true
-			}
-			if app.Spec.ALG.DNS.DropLargeDomainNamePackets {
-				dnsMap["drop_large_domain_name_packets"] = true
-			}
-			if app.Spec.ALG.DNS.DropLongLabelPackets {
-				dnsMap["drop_long_label_packets"] = true
-			}
-			if app.Spec.ALG.DNS.MaxMessageLength != 0 {
-				dnsMap["max_message_length"] = app.Spec.ALG.DNS.MaxMessageLength
-			}
-			if app.Spec.ALG.TFTP != nil {
-				algMap["tftp"] = []interface{}{map[string]interface{}{}}
-			}
-			if app.Spec.ALG.RTSP != nil {
-				algMap["rtsp"] = []interface{}{map[string]interface{}{}}
-			}
-
-			algMap["dns"] = []interface{}{dnsMap}
-		}
-
-		if app.Spec.Timeout != nil {
-			spec["timeout"] = *app.Spec.Timeout
-		}
-
-		if app.Spec.ALG.FTP != nil {
-			algMap["ftp"] = []interface{}{
-				map[string]interface{}{
-					"allow_mismatch_ip_address": app.Spec.ALG.FTP.AllowMismatchIPAddress,
-				},
-			}
-		}
-		if len(app.Spec.ALG.SunRPC) > 0 {
-			sunrpc := make([]map[string]interface{}, len(app.Spec.ALG.SunRPC))
-			for i, s := range app.Spec.ALG.SunRPC {
-				sunrpc[i] = map[string]interface{}{
-					"program_id": s.ProgramID,
+		// Set ALG fields based on the type
+		switch app.Spec.ALG.Type {
+		case "icmp":
+			if app.Spec.ALG.ICMP != nil {
+				algMap["icmp"] = []interface{}{
+					map[string]interface{}{
+						"type": app.Spec.ALG.ICMP.Type,
+						"code": app.Spec.ALG.ICMP.Code,
+					},
 				}
 			}
-			algMap["sunrpc"] = sunrpc
-		}
-		if len(app.Spec.ALG.MSRPC) > 0 {
-			msrpc := make([]map[string]interface{}, len(app.Spec.ALG.MSRPC))
-			for i, m := range app.Spec.ALG.MSRPC {
-				msrpc[i] = map[string]interface{}{
-					"program_uuid": m.ProgramUUID,
-					"timeout":      m.Timeout,
+		case "dns":
+			if app.Spec.ALG.DNS != nil {
+				algMap["dns"] = []interface{}{
+					map[string]interface{}{
+						"drop_multi_question_packets":    app.Spec.ALG.DNS.DropMultiQuestionPackets,
+						"drop_large_domain_name_packets": app.Spec.ALG.DNS.DropLargeDomainNamePackets,
+						"drop_long_label_packets":        app.Spec.ALG.DNS.DropLongLabelPackets,
+						"max_message_length":             app.Spec.ALG.DNS.MaxMessageLength,
+					},
 				}
 			}
-			algMap["msrpc"] = msrpc
+		case "ftp":
+			if app.Spec.ALG.FTP != nil {
+				algMap["ftp"] = []interface{}{
+					map[string]interface{}{
+						"allow_mismatch_ip_address": app.Spec.ALG.FTP.AllowMismatchIPAddress,
+					},
+				}
+			}
+		case "sunrpc":
+			if len(app.Spec.ALG.SunRPC) > 0 {
+				sunrpc := make([]map[string]interface{}, len(app.Spec.ALG.SunRPC))
+				for i, s := range app.Spec.ALG.SunRPC {
+					sunrpc[i] = map[string]interface{}{
+						"program_id": s.ProgramID,
+					}
+				}
+				algMap["sunrpc"] = sunrpc
+			}
+		case "msrpc":
+			if len(app.Spec.ALG.MSRPC) > 0 {
+				msrpc := make([]map[string]interface{}, len(app.Spec.ALG.MSRPC))
+				for i, m := range app.Spec.ALG.MSRPC {
+					msrpc[i] = map[string]interface{}{
+						"program_uuid": m.ProgramUUID,
+					}
+				}
+				algMap["msrpc"] = msrpc
+			}
+		case "tftp":
+			algMap["tftp"] = []interface{}{map[string]interface{}{}}
+		case "rtsp":
+			algMap["rtsp"] = []interface{}{map[string]interface{}{}}
 		}
 		spec["alg"] = []interface{}{algMap}
 	}
 
-	d.Set("spec", []interface{}{spec})
+	if app.Spec.Timeout != nil {
+		spec["timeout"] = *app.Spec.Timeout
+	}
+
+	if err := d.Set("spec", []interface{}{spec}); err != nil {
+		return diag.FromErr(err)
+	}
 
 	return nil
 }
@@ -817,4 +830,47 @@ func parseMSRPC(msrpc []interface{}) []MSRPC {
 		})
 	}
 	return msrpcs
+}
+func resourceAppsImport(ctx context.Context, d *schema.ResourceData, m interface{}) ([]*schema.ResourceData, error) {
+	config := m.(*Config)
+	client := config.Client()
+
+	// The ID passed will be the name of the App
+	name := d.Id()
+
+	// Construct the URL for fetching the App
+	url := fmt.Sprintf("%s/configs/security/v1/tenant/default/apps/%s", config.Server, name)
+
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	req.AddCookie(&http.Cookie{Name: "sid", Value: config.SID})
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("failed to import app: HTTP %s", resp.Status)
+	}
+
+	app := &App{}
+	if err := json.NewDecoder(resp.Body).Decode(app); err != nil {
+		return nil, err
+	}
+
+	// Set the ID to the UUID returned by the API
+	d.SetId(app.Meta.UUID.(string))
+
+	// Call Read to populate the rest of the data
+	diags := resourceAppsRead(ctx, d, m)
+	if diags.HasError() {
+		return nil, fmt.Errorf("failed to read imported app: %v", diags)
+	}
+
+	return []*schema.ResourceData{d}, nil
 }
