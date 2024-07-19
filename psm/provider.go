@@ -23,6 +23,7 @@ func Provider() *schema.Provider {
 			"psm_flow_export_policy":   resourceFlowExportPolicy(),
 			"psm_syslog_export_policy": resourceSyslogPolicy(),
 			"psm_app":                  resourceApps(),
+			"psm_cluster":              resourceCluster(),
 		},
 		Schema: map[string]*schema.Schema{
 			"user": {

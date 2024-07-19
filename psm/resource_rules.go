@@ -135,6 +135,22 @@ func resourceRules() *schema.Resource {
 										Optional: true,
 										ForceNew: false,
 									},
+									"proto_ports": {
+										Type:     schema.TypeList,
+										Optional: true,
+										Elem: &schema.Resource{
+											Schema: map[string]*schema.Schema{
+												"protocol": {
+													Type:     schema.TypeString,
+													Required: true,
+												},
+												"ports": {
+													Type:     schema.TypeString,
+													Optional: true,
+												},
+											},
+										},
+									},
 									"disable": {
 										Type:     schema.TypeBool,
 										Optional: true,
@@ -252,6 +268,22 @@ func resourceRules() *schema.Resource {
 							Optional: true,
 							ForceNew: false,
 						},
+						"proto_ports": {
+							Type:     schema.TypeList,
+							Optional: true,
+							Elem: &schema.Resource{
+								Schema: map[string]*schema.Schema{
+									"protocol": {
+										Type:     schema.TypeString,
+										Required: true,
+									},
+									"ports": {
+										Type:     schema.TypeString,
+										Optional: true,
+									},
+								},
+							},
+						},
 						"action": {
 							Type:         schema.TypeString,
 							Required:     true,
@@ -311,6 +343,12 @@ type Rule struct {
 	ToIPCollections   []string          `json:"to-ipcollections"`
 	FromWorkloadGroup []string          `json:"from-workload-groups"`
 	ToWorkloadGroup   []string          `json:"to-workload-groups"`
+	ProtoPorts        []ProtoPort       `json:"proto-ports"`
+}
+
+type ProtoPort struct {
+	Protocol string `json:"protocol"`
+	Ports    string `json:"ports"`
 }
 
 type Status struct {
@@ -386,6 +424,18 @@ func resourceRulesCreate(ctx context.Context, d *schema.ResourceData, m interfac
 				ToIPCollections:   convertToStringSlice(ruleMap["to_ip_collections"].([]interface{})),
 				FromWorkloadGroup: convertToStringSlice(ruleMap["from_workloadgroups"].([]interface{})),
 				ToWorkloadGroup:   convertToStringSlice(ruleMap["to_workloadgroups"].([]interface{})),
+			}
+
+			if v, ok := ruleMap["proto_ports"].([]interface{}); ok && len(v) > 0 {
+				protoPorts := make([]ProtoPort, len(v))
+				for i, pp := range v {
+					ppMap := pp.(map[string]interface{})
+					protoPorts[i] = ProtoPort{
+						Protocol: ppMap["protocol"].(string),
+						Ports:    ppMap["ports"].(string),
+					}
+				}
+				rule.ProtoPorts = protoPorts
 			}
 
 			if v, ok := ruleMap["labels"].(map[string]interface{}); ok {
@@ -522,9 +572,9 @@ func resourceRulesRead(ctx context.Context, d *schema.ResourceData, m interface{
 	d.Set("policy_name", responsePolicy.Meta.Name)
 	d.Set("tenant", responsePolicy.Meta.Tenant)
 
-	rules := make([]interface{}, len(responsePolicy.Spec.Rules))
+	rules := make([]map[string]interface{}, len(responsePolicy.Spec.Rules))
 	for i, rule := range responsePolicy.Spec.Rules {
-		rules[i] = map[string]interface{}{
+		ruleMap := map[string]interface{}{
 			"name":                rule.Name,
 			"action":              rule.Action,
 			"description":         rule.Description,
@@ -537,6 +587,19 @@ func resourceRulesRead(ctx context.Context, d *schema.ResourceData, m interface{
 			"from_workloadgroups": rule.FromWorkloadGroup,
 			"to_workloadgroups":   rule.ToWorkloadGroup,
 		}
+
+		if len(rule.ProtoPorts) > 0 {
+			protoPorts := make([]map[string]interface{}, len(rule.ProtoPorts))
+			for j, pp := range rule.ProtoPorts {
+				protoPorts[j] = map[string]interface{}{
+					"protocol": pp.Protocol,
+					"ports":    pp.Ports,
+				}
+			}
+			ruleMap["proto_ports"] = protoPorts
+		}
+
+		rules[i] = ruleMap
 	}
 
 	if err := d.Set("spec", []interface{}{map[string]interface{}{
@@ -547,6 +610,7 @@ func resourceRulesRead(ctx context.Context, d *schema.ResourceData, m interface{
 	}}); err != nil {
 		return diag.FromErr(err)
 	}
+
 	if err := d.Set("meta", []interface{}{map[string]interface{}{
 		"name":             responsePolicy.Meta.Name,
 		"tenant":           responsePolicy.Meta.Tenant,
@@ -611,6 +675,18 @@ func resourceRulesUpdate(ctx context.Context, d *schema.ResourceData, m interfac
 				ToIPCollections:   convertToStringSlice(ruleMap["to_ip_collections"].([]interface{})),
 				FromWorkloadGroup: convertToStringSlice(ruleMap["from_workloadgroups"].([]interface{})),
 				ToWorkloadGroup:   convertToStringSlice(ruleMap["to_workloadgroups"].([]interface{})),
+			}
+
+			if v, ok := ruleMap["proto_ports"].([]interface{}); ok && len(v) > 0 {
+				protoPorts := make([]ProtoPort, len(v))
+				for i, pp := range v {
+					ppMap := pp.(map[string]interface{})
+					protoPorts[i] = ProtoPort{
+						Protocol: ppMap["protocol"].(string),
+						Ports:    ppMap["ports"].(string),
+					}
+				}
+				rule.ProtoPorts = protoPorts
 			}
 
 			if v, ok := ruleMap["labels"].(map[string]interface{}); ok {
