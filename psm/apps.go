@@ -35,7 +35,7 @@ func resourceApps() *schema.Resource {
 			"display_name": {
 				Type:     schema.TypeString,
 				Required: true,
-				ForceNew: true,
+				ForceNew: false,
 			},
 			"meta": {
 				Type:     schema.TypeList,

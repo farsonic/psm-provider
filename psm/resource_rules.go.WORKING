@@ -331,19 +331,19 @@ type Spec struct {
 }
 
 type Rule struct {
-	Name              string            `json:"name"`
+	Apps              []string          `json:"apps"`
 	Action            string            `json:"action"`
 	Description       string            `json:"description"`
-	Apps              []string          `json:"apps,omitempty"`
-	Disable           bool              `json:"disable"`
-	FromIPAddresses   []string          `json:"from-ip-addresses,omitempty"`
-	ToIPAddresses     []string          `json:"to-ip-addresses,omitempty"`
-	FromIPCollections []string          `json:"from-ipcollections,omitempty"`
-	ToIPCollections   []string          `json:"to-ipcollections,omitempty"`
-	FromWorkloadGroup []string          `json:"from-workload-groups,omitempty"`
-	ToWorkloadGroup   []string          `json:"to-workload-groups,omitempty"`
+	Name              string            `json:"name"`
 	Labels            map[string]string `json:"labels,omitempty"`
-	ProtoPorts        []ProtoPort       `json:"proto-ports,omitempty"`
+	Disable           bool              `json:"disable"`
+	FromIPAddresses   []string          `json:"from-ip-addresses"`
+	ToIPAddresses     []string          `json:"to-ip-addresses"`
+	FromIPCollections []string          `json:"from-ipcollections"`
+	ToIPCollections   []string          `json:"to-ipcollections"`
+	FromWorkloadGroup []string          `json:"from-workload-groups"`
+	ToWorkloadGroup   []string          `json:"to-workload-groups"`
+	ProtoPorts        []ProtoPort       `json:"proto-ports"`
 }
 
 type ProtoPort struct {
@@ -413,38 +413,37 @@ func resourceRulesCreate(ctx context.Context, d *schema.ResourceData, m interfac
 				return diag.Errorf("unexpected type for rule: %T", v)
 			}
 			rule := Rule{
-				Name:        getStringOrEmpty(ruleMap, "rule_name"),
-				Action:      getStringOrEmpty(ruleMap, "action"),
-				Description: getStringOrEmpty(ruleMap, "description"),
-				Disable:     getBoolOrDefault(ruleMap, "disable", false),
+				Apps:              convertToStringSlice(ruleMap["apps"].([]interface{})),
+				Action:            ruleMap["action"].(string),
+				Description:       ruleMap["description"].(string),
+				Name:              ruleMap["rule_name"].(string),
+				Disable:           ruleMap["disable"].(bool),
+				FromIPAddresses:   convertToStringSlice(ruleMap["from_ip_addresses"].([]interface{})),
+				ToIPAddresses:     convertToStringSlice(ruleMap["to_ip_addresses"].([]interface{})),
+				FromIPCollections: convertToStringSlice(ruleMap["from_ip_collections"].([]interface{})),
+				ToIPCollections:   convertToStringSlice(ruleMap["to_ip_collections"].([]interface{})),
+				FromWorkloadGroup: convertToStringSlice(ruleMap["from_workloadgroups"].([]interface{})),
+				ToWorkloadGroup:   convertToStringSlice(ruleMap["to_workloadgroups"].([]interface{})),
 			}
 
-			rule.Apps = getStringSlice(ruleMap, "apps")
-			rule.FromIPAddresses = getStringSlice(ruleMap, "from_ip_addresses")
-			rule.ToIPAddresses = getStringSlice(ruleMap, "to_ip_addresses")
-			rule.FromIPCollections = getStringSlice(ruleMap, "from_ip_collections")
-			rule.ToIPCollections = getStringSlice(ruleMap, "to_ip_collections")
-			rule.FromWorkloadGroup = getStringSlice(ruleMap, "from_workloadgroups")
-			rule.ToWorkloadGroup = getStringSlice(ruleMap, "to_workloadgroups")
-
-			if protoPorts, ok := ruleMap["proto_ports"].([]interface{}); ok {
-				for _, pp := range protoPorts {
-					ppMap, ok := pp.(map[string]interface{})
-					if !ok {
-						continue
+			if v, ok := ruleMap["proto_ports"].([]interface{}); ok && len(v) > 0 {
+				protoPorts := make([]ProtoPort, len(v))
+				for i, pp := range v {
+					ppMap := pp.(map[string]interface{})
+					protoPorts[i] = ProtoPort{
+						Protocol: ppMap["protocol"].(string),
+						Ports:    ppMap["ports"].(string),
 					}
-					rule.ProtoPorts = append(rule.ProtoPorts, ProtoPort{
-						Protocol: getStringOrEmpty(ppMap, "protocol"),
-						Ports:    getStringOrEmpty(ppMap, "ports"),
-					})
 				}
+				rule.ProtoPorts = protoPorts
 			}
 
-			if labels, ok := ruleMap["labels"].(map[string]interface{}); ok {
-				rule.Labels = make(map[string]string)
-				for k, v := range labels {
-					rule.Labels[k] = fmt.Sprintf("%v", v)
+			if v, ok := ruleMap["labels"].(map[string]interface{}); ok {
+				labels := make(map[string]string)
+				for k, v := range v {
+					labels[k] = v.(string)
 				}
+				rule.Labels = labels
 			}
 
 			policy.Spec.Rules = append(policy.Spec.Rules, rule)
@@ -473,7 +472,7 @@ func resourceRulesCreate(ctx context.Context, d *schema.ResourceData, m interfac
 
 	if response.StatusCode != http.StatusOK {
 		bodyBytes, _ := io.ReadAll(response.Body)
-		errMsg := fmt.Sprintf("Failed to create Security Policy: HTTP %d %s: %s", response.StatusCode, response.Status, bodyBytes)
+		errMsg := fmt.Sprintf("Failed to create network: HTTP %d %s: %s", response.StatusCode, response.Status, bodyBytes)
 		return diag.Errorf("Security Policy creation failed: %s", errMsg)
 	}
 
@@ -554,7 +553,7 @@ func resourceRulesRead(ctx context.Context, d *schema.ResourceData, m interface{
 
 	if response.StatusCode != http.StatusOK {
 		bodyBytes, _ := io.ReadAll(response.Body)
-		errMsg := fmt.Sprintf("Failed to create Security Policy: HTTP %d %s: %s", response.StatusCode, response.Status, bodyBytes)
+		errMsg := fmt.Sprintf("Failed to create network: HTTP %d %s: %s", response.StatusCode, response.Status, bodyBytes)
 		return diag.Errorf("Security Policy creation failed: %s", errMsg)
 	}
 
@@ -724,7 +723,7 @@ func resourceRulesUpdate(ctx context.Context, d *schema.ResourceData, m interfac
 
 	if response.StatusCode != http.StatusOK {
 		bodyBytes, _ := io.ReadAll(response.Body)
-		errMsg := fmt.Sprintf("Failed to create Security Policy: HTTP %d %s: %s", response.StatusCode, response.Status, bodyBytes)
+		errMsg := fmt.Sprintf("Failed to create network: HTTP %d %s: %s", response.StatusCode, response.Status, bodyBytes)
 		return diag.Errorf("Security Policy creation failed: %s", errMsg)
 	}
 
@@ -805,7 +804,7 @@ func resourceRulesDelete(ctx context.Context, d *schema.ResourceData, m interfac
 
 	if response.StatusCode != http.StatusOK {
 		bodyBytes, _ := io.ReadAll(response.Body)
-		errMsg := fmt.Sprintf("Failed to create Security Policy: HTTP %d %s: %s", response.StatusCode, response.Status, bodyBytes)
+		errMsg := fmt.Sprintf("Failed to create network: HTTP %d %s: %s", response.StatusCode, response.Status, bodyBytes)
 		return diag.Errorf("Security Policy creation failed: %s", errMsg)
 	}
 
