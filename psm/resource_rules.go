@@ -119,6 +119,11 @@ func resourceRules() *schema.Resource {
 										Optional: true,
 										Elem:     &schema.Schema{Type: schema.TypeString},
 									},
+									"rule_profile": {
+										Type:     schema.TypeString,
+										Optional: true,
+										ForceNew: false,
+									},
 									"action": {
 										Type:     schema.TypeString,
 										Required: true,
@@ -232,6 +237,11 @@ func resourceRules() *schema.Resource {
 							Optional: true,
 							Elem:     &schema.Schema{Type: schema.TypeString},
 						},
+						"rule_profile": {
+							Type:     schema.TypeString,
+							Optional: true,
+							ForceNew: false,
+						},
 						"from_ip_collections": {
 							Type:     schema.TypeList,
 							Elem:     &schema.Schema{Type: schema.TypeString},
@@ -344,6 +354,7 @@ type Rule struct {
 	ToWorkloadGroup   []string          `json:"to-workload-groups,omitempty"`
 	Labels            map[string]string `json:"labels,omitempty"`
 	ProtoPorts        []ProtoPort       `json:"proto-ports,omitempty"`
+	RuleProfile       string            `json:"rule-profile,omitempty"`
 }
 
 type ProtoPort struct {
@@ -426,6 +437,7 @@ func resourceRulesCreate(ctx context.Context, d *schema.ResourceData, m interfac
 			rule.ToIPCollections = getStringSlice(ruleMap, "to_ip_collections")
 			rule.FromWorkloadGroup = getStringSlice(ruleMap, "from_workloadgroups")
 			rule.ToWorkloadGroup = getStringSlice(ruleMap, "to_workloadgroups")
+			rule.RuleProfile = getStringOrEmpty(ruleMap, "rule_profile")
 
 			if protoPorts, ok := ruleMap["proto_ports"].([]interface{}); ok {
 				for _, pp := range protoPorts {
@@ -445,6 +457,10 @@ func resourceRulesCreate(ctx context.Context, d *schema.ResourceData, m interfac
 				for k, v := range labels {
 					rule.Labels[k] = fmt.Sprintf("%v", v)
 				}
+			}
+
+			if ruleProfile, ok := ruleMap["rule_profile"].(string); ok && ruleProfile != "" {
+				rule.RuleProfile = ruleProfile
 			}
 
 			policy.Spec.Rules = append(policy.Spec.Rules, rule)
@@ -506,6 +522,7 @@ func resourceRulesCreate(ctx context.Context, d *schema.ResourceData, m interfac
 			"to_ip_addresses":     rule.ToIPAddresses,
 			"from_workloadgroups": rule.FromWorkloadGroup,
 			"to_workloadgroups":   rule.ToWorkloadGroup,
+			"rule_profile":        rule.RuleProfile,
 		}
 	}
 
@@ -587,6 +604,7 @@ func resourceRulesRead(ctx context.Context, d *schema.ResourceData, m interface{
 			"to_ip_addresses":     rule.ToIPAddresses,
 			"from_workloadgroups": rule.FromWorkloadGroup,
 			"to_workloadgroups":   rule.ToWorkloadGroup,
+			"rule_profile":        rule.RuleProfile,
 		}
 
 		if len(rule.ProtoPorts) > 0 {
@@ -678,6 +696,10 @@ func resourceRulesUpdate(ctx context.Context, d *schema.ResourceData, m interfac
 				ToWorkloadGroup:   convertToStringSlice(ruleMap["to_workloadgroups"].([]interface{})),
 			}
 
+			if ruleProfile, ok := ruleMap["rule_profile"].(string); ok && ruleProfile != "" {
+				rule.RuleProfile = ruleProfile
+			}
+
 			if v, ok := ruleMap["proto_ports"].([]interface{}); ok && len(v) > 0 {
 				protoPorts := make([]ProtoPort, len(v))
 				for i, pp := range v {
@@ -757,6 +779,7 @@ func resourceRulesUpdate(ctx context.Context, d *schema.ResourceData, m interfac
 			"to_ip_addresses":     rule.ToIPAddresses,
 			"from_workloadgroups": rule.FromWorkloadGroup,
 			"to_workloadgroups":   rule.ToWorkloadGroup,
+			"rule_profile":        rule.RuleProfile,
 		}
 	}
 
