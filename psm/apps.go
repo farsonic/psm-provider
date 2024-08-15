@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
@@ -27,10 +26,12 @@ func resourceApps() *schema.Resource {
 			"kind": {
 				Type:     schema.TypeString,
 				Optional: true,
+				Computed: true,
 			},
 			"api_version": {
 				Type:     schema.TypeString,
 				Optional: true,
+				Computed: true,
 			},
 			"display_name": {
 				Type:     schema.TypeString,
@@ -116,7 +117,6 @@ func resourceApps() *schema.Resource {
 						"timeout": {
 							Type:     schema.TypeString,
 							Optional: true,
-							Default:  "60s",
 						},
 						"alg": {
 							Type:     schema.TypeList,
@@ -248,16 +248,18 @@ type App struct {
 		GenerationID    interface{}       `json:"generation-id"`
 		ResourceVersion interface{}       `json:"resource-version"`
 		UUID            interface{}       `json:"uuid"`
-		Labels          map[string]string `json:"labels"`
+		Labels          map[string]string `json:"labels,omitempty"`
 		SelfLink        interface{}       `json:"self-link"`
 		DisplayName     string            `json:"display-name"`
 	} `json:"meta"`
-	Spec struct {
-		ProtoPorts []ProtoPorts `json:"proto-ports"`
-		Apps       []string     `json:"apps"`
-		Timeout    *string      `json:"timeout,omitempty"`
-		ALG        *ALG         `json:"alg,omitempty"`
-	} `json:"spec"`
+	Spec AppSpec `json:"spec"`
+}
+
+type AppSpec struct {
+	ProtoPorts []ProtoPorts `json:"proto-ports,omitempty"`
+	Apps       []string     `json:"apps,omitempty"`
+	Timeout    *string      `json:"timeout,omitempty"`
+	ALG        *ALG         `json:"alg,omitempty"`
 }
 
 type ProtoPorts struct {
@@ -310,40 +312,40 @@ func resourceAppsCreate(ctx context.Context, d *schema.ResourceData, m interface
 	client := config.Client()
 
 	app := &App{}
+	app.Meta.Tenant = "default"
+
+	app.Meta.DisplayName = d.Get("display_name").(string)
 
 	if spec, ok := d.Get("spec").([]interface{}); ok && len(spec) > 0 {
 		specMap := spec[0].(map[string]interface{})
 
 		if protoPorts, ok := specMap["proto_ports"].([]interface{}); ok {
+			app.Spec.ProtoPorts = []ProtoPorts{}
 			for _, p := range protoPorts {
 				port := p.(map[string]interface{})
-				protoPort := ProtoPorts{}
-				if protocol, ok := port["protocol"].(string); ok {
-					protoPort.Protocol = protocol
+				protoPort := ProtoPorts{
+					Protocol: port["protocol"].(string),
+					Ports:    port["ports"].(string),
 				}
-				if ports, ok := port["ports"].(string); ok {
-					protoPort.Ports = ports
-				}
-
 				app.Spec.ProtoPorts = append(app.Spec.ProtoPorts, protoPort)
 			}
 		}
+
 		if apps, ok := specMap["apps"].([]interface{}); ok {
-			for _, a := range apps {
-				app.Spec.Apps = append(app.Spec.Apps, a.(string))
+			app.Spec.Apps = make([]string, len(apps))
+			for i, a := range apps {
+				app.Spec.Apps[i] = a.(string)
 			}
 		}
+
+		// Only set timeout if it's explicitly defined
+		if timeout, ok := specMap["timeout"].(string); ok && timeout != "" {
+			app.Spec.Timeout = &timeout
+		}
+
 		if algList, ok := specMap["alg"].([]interface{}); ok && len(algList) > 0 {
 			algMap := algList[0].(map[string]interface{})
 			algType := algMap["type"].(string)
-
-			// Only set timeout for RPC ALGs
-			if algType == "sunrpc" || algType == "msrpc" {
-				if timeout, ok := specMap["timeout"].(string); ok {
-					timeoutPtr := timeout
-					app.Spec.Timeout = &timeoutPtr
-				}
-			}
 
 			alg := &ALG{
 				Type: algType,
@@ -389,26 +391,17 @@ func resourceAppsCreate(ctx context.Context, d *schema.ResourceData, m interface
 		}
 	}
 
-	app.Meta.DisplayName = d.Get("display_name").(string)
-
-	// Convert the API struct to JSON.
-	jsonBytes, err := json.Marshal(app)
-	if err != nil {
-		return diag.FromErr(err)
-	}
-	fmt.Println(string(jsonBytes))
-
-	req, err := http.NewRequestWithContext(ctx, "POST", config.Server+"/configs/security/v1/tenant/default/apps", bytes.NewBuffer(jsonBytes))
+	jsonData, err := json.Marshal(app)
 	if err != nil {
 		return diag.FromErr(err)
 	}
 
-	// Log the request details
-	log.Printf("[DEBUG] Request method: %s", req.Method)
-	log.Printf("[DEBUG] Request URL: %s", req.URL.String())
-	log.Printf("[DEBUG] Request body: %s", jsonBytes)
+	req, err := http.NewRequestWithContext(ctx, "POST", fmt.Sprintf("%s/configs/security/v1/tenant/default/apps", config.Server), bytes.NewBuffer(jsonData))
+	if err != nil {
+		return diag.FromErr(err)
+	}
 
-	// Set SID cookie for authentication
+	req.Header.Set("Content-Type", "application/json")
 	req.AddCookie(&http.Cookie{Name: "sid", Value: config.SID})
 
 	resp, err := client.Do(req)
@@ -419,26 +412,17 @@ func resourceAppsCreate(ctx context.Context, d *schema.ResourceData, m interface
 
 	if resp.StatusCode != http.StatusOK {
 		bodyBytes, _ := io.ReadAll(resp.Body)
-		errMsg := fmt.Sprintf("failed to create app: HTTP %d %s: %s", resp.StatusCode, resp.Status, bodyBytes)
-		// Added for additional debug if the JSON we send to the PSM server is invalid.
-		return diag.Diagnostics{
-			{
-				Severity: diag.Error,
-				Summary:  "App creation failed",
-				Detail:   errMsg,
-			},
-		}
+		return diag.Errorf("failed to create app: HTTP %d - %s", resp.StatusCode, string(bodyBytes))
 	}
 
-	responseBody := &App{}
-	if err := json.NewDecoder(resp.Body).Decode(responseBody); err != nil {
+	var createdApp App
+	if err := json.NewDecoder(resp.Body).Decode(&createdApp); err != nil {
 		return diag.FromErr(err)
 	}
 
-	// Set the Terraform resource ID to the UUID returned by the API.
-	d.SetId(responseBody.Meta.UUID.(string))
+	d.SetId(createdApp.Meta.UUID.(string))
 
-	return append(diag.Diagnostics{}, resourceAppsRead(ctx, d, m)...)
+	return resourceAppsRead(ctx, d, m)
 }
 
 func resourceAppsRead(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
@@ -497,15 +481,24 @@ func resourceAppsRead(ctx context.Context, d *schema.ResourceData, m interface{}
 	// Set spec
 	spec := map[string]interface{}{}
 
-	protoPorts := make([]map[string]interface{}, len(app.Spec.ProtoPorts))
-	for i, pp := range app.Spec.ProtoPorts {
-		protoPorts[i] = map[string]interface{}{
-			"protocol": pp.Protocol,
-			"ports":    pp.Ports,
+	if len(app.Spec.ProtoPorts) > 0 {
+		protoPorts := make([]map[string]interface{}, len(app.Spec.ProtoPorts))
+		for i, pp := range app.Spec.ProtoPorts {
+			protoPorts[i] = map[string]interface{}{
+				"protocol": pp.Protocol,
+				"ports":    pp.Ports,
+			}
 		}
+		spec["proto_ports"] = protoPorts
 	}
-	spec["proto_ports"] = protoPorts
-	spec["apps"] = app.Spec.Apps
+
+	if len(app.Spec.Apps) > 0 {
+		spec["apps"] = app.Spec.Apps
+	}
+
+	if app.Spec.Timeout != nil {
+		spec["timeout"] = *app.Spec.Timeout
+	}
 
 	if app.Spec.ALG != nil {
 		algMap := map[string]interface{}{
@@ -584,9 +577,10 @@ func resourceAppsUpdate(ctx context.Context, d *schema.ResourceData, m interface
 	config := m.(*Config)
 	client := config.Client()
 
-	// Fetch the current state of the app
 	app := &App{}
-	url := config.Server + "/configs/security/v1/tenant/default/apps/" + d.Id()
+
+	// Fetch the current state of the app
+	url := fmt.Sprintf("%s/configs/security/v1/tenant/default/apps/%s", config.Server, d.Id())
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
 		return diag.FromErr(err)
@@ -604,46 +598,16 @@ func resourceAppsUpdate(ctx context.Context, d *schema.ResourceData, m interface
 		return diag.FromErr(err)
 	}
 
-	log.Printf("[DEBUG] Current app state: %+v", app)
-
-	// Update fields that have changed
-	if d.HasChange("kind") {
-		app.Kind = d.Get("kind")
-	}
-	if d.HasChange("api_version") {
-		app.APIVersion = d.Get("api_version")
-	}
 	if d.HasChange("display_name") {
 		app.Meta.DisplayName = d.Get("display_name").(string)
-	}
-
-	if d.HasChange("meta") {
-		if meta, ok := d.GetOk("meta"); ok {
-			metaList := meta.([]interface{})
-			if len(metaList) > 0 {
-				metaMap := metaList[0].(map[string]interface{})
-				app.Meta.Name = metaMap["name"].(string)
-				app.Meta.Tenant = metaMap["tenant"]
-				app.Meta.Namespace = metaMap["namespace"]
-				app.Meta.GenerationID = metaMap["generation_id"]
-				app.Meta.ResourceVersion = metaMap["resource_version"]
-				app.Meta.UUID = metaMap["uuid"]
-
-				if labels, ok := metaMap["labels"].(map[string]interface{}); ok {
-					app.Meta.Labels = make(map[string]string)
-					for k, v := range labels {
-						app.Meta.Labels[k] = v.(string)
-					}
-				}
-
-				app.Meta.SelfLink = metaMap["self_link"]
-			}
-		}
 	}
 
 	if d.HasChange("spec") {
 		if spec, ok := d.Get("spec").([]interface{}); ok && len(spec) > 0 {
 			specMap := spec[0].(map[string]interface{})
+
+			// Reset the spec
+			app.Spec = AppSpec{}
 
 			if protoPorts, ok := specMap["proto_ports"].([]interface{}); ok {
 				app.Spec.ProtoPorts = []ProtoPorts{}
@@ -664,6 +628,11 @@ func resourceAppsUpdate(ctx context.Context, d *schema.ResourceData, m interface
 				}
 			}
 
+			// Only set timeout if it's explicitly defined
+			if timeout, ok := specMap["timeout"].(string); ok && timeout != "" {
+				app.Spec.Timeout = &timeout
+			}
+
 			if algList, ok := specMap["alg"].([]interface{}); ok && len(algList) > 0 {
 				algMap := algList[0].(map[string]interface{})
 				algType := algMap["type"].(string)
@@ -672,43 +641,22 @@ func resourceAppsUpdate(ctx context.Context, d *schema.ResourceData, m interface
 					Type: algType,
 				}
 
-				// Only set timeout for RPC ALGs
-				if algType == "sunrpc" || algType == "msrpc" {
-					if timeout, ok := specMap["timeout"].(string); ok {
-						app.Spec.Timeout = &timeout
-					}
-				} else {
-					app.Spec.Timeout = nil // Clear timeout for non-RPC ALGs
-				}
-
-				switch alg.Type {
+				// Handle ALG fields based on type
+				switch algType {
 				case "icmp":
 					if icmp, ok := algMap["icmp"].([]interface{}); ok && len(icmp) > 0 {
 						alg.ICMP = parseICMP(icmp[0].(map[string]interface{}))
 					}
 				case "dns":
 					if dns, ok := algMap["dns"].([]interface{}); ok && len(dns) > 0 {
-						dnsMap := dns[0].(map[string]interface{})
-						alg.DNS = &DNS{}
-						if v, ok := dnsMap["drop_multi_question_packets"]; ok {
-							alg.DNS.DropMultiQuestionPackets = v.(bool)
-						}
-						if v, ok := dnsMap["drop_large_domain_name_packets"]; ok {
-							alg.DNS.DropLargeDomainNamePackets = v.(bool)
-						}
-						if v, ok := dnsMap["drop_long_label_packets"]; ok {
-							alg.DNS.DropLongLabelPackets = v.(bool)
-						}
-						if v, ok := dnsMap["max_message_length"]; ok {
-							alg.DNS.MaxMessageLength = int64(v.(int))
-						}
+						alg.DNS = parseDNS(dns[0].(map[string]interface{}))
 					}
 				case "ftp":
 					if ftp, ok := algMap["ftp"].([]interface{}); ok && len(ftp) > 0 {
 						alg.FTP = parseFTP(ftp[0].(map[string]interface{}))
 					}
 				case "sunrpc":
-					if sunrpc, ok := algMap["sunrpc"].([]interface{}); ok && len(sunrpc) > 0 {
+					if sunrpc, ok := algMap["sunrpc"].([]interface{}); ok {
 						alg.SunRPC = parseSunRPC(sunrpc)
 					}
 				case "msrpc":
@@ -716,33 +664,27 @@ func resourceAppsUpdate(ctx context.Context, d *schema.ResourceData, m interface
 						alg.MSRPC = parseMSRPC(msrpc)
 					}
 				case "tftp":
-					alg.TFTP = &TFTP{} // TFTP doesn't have any specific fields
+					alg.TFTP = &TFTP{}
 				case "rtsp":
-					alg.RTSP = &RTSP{} // RTSP doesn't have any specific fields
+					alg.RTSP = &RTSP{}
 				}
 
 				app.Spec.ALG = alg
-			} else {
-				app.Spec.ALG = nil
-				app.Spec.Timeout = nil
 			}
 		}
 	}
 
-	jsonBytes, err := json.Marshal(app)
+	jsonData, err := json.Marshal(app)
 	if err != nil {
 		return diag.FromErr(err)
 	}
 
-	req, err = http.NewRequestWithContext(ctx, "PUT", config.Server+"/configs/security/v1/tenant/default/apps/"+d.Id(), bytes.NewBuffer(jsonBytes))
+	req, err = http.NewRequestWithContext(ctx, "PUT", url, bytes.NewBuffer(jsonData))
 	if err != nil {
 		return diag.FromErr(err)
 	}
 
-	log.Printf("[DEBUG] Request method: %s", req.Method)
-	log.Printf("[DEBUG] Request URL: %s", req.URL.String())
-	log.Printf("[DEBUG] Request body: %s", jsonBytes)
-
+	req.Header.Set("Content-Type", "application/json")
 	req.AddCookie(&http.Cookie{Name: "sid", Value: config.SID})
 
 	resp, err = client.Do(req)
@@ -753,14 +695,7 @@ func resourceAppsUpdate(ctx context.Context, d *schema.ResourceData, m interface
 
 	if resp.StatusCode != http.StatusOK {
 		bodyBytes, _ := io.ReadAll(resp.Body)
-		errMsg := fmt.Sprintf("failed to update app: HTTP %d %s: %s", resp.StatusCode, resp.Status, bodyBytes)
-		return diag.Diagnostics{
-			{
-				Severity: diag.Error,
-				Summary:  "App update failed",
-				Detail:   errMsg,
-			},
-		}
+		return diag.Errorf("failed to update app: HTTP %d - %s", resp.StatusCode, string(bodyBytes))
 	}
 
 	return resourceAppsRead(ctx, d, m)
@@ -801,6 +736,15 @@ func parseICMP(icmpMap map[string]interface{}) *ICMP {
 	return &ICMP{
 		Type: icmpMap["type"].(string),
 		Code: icmpMap["code"].(string),
+	}
+}
+
+func parseDNS(dnsMap map[string]interface{}) *DNS {
+	return &DNS{
+		DropMultiQuestionPackets:   dnsMap["drop_multi_question_packets"].(bool),
+		DropLargeDomainNamePackets: dnsMap["drop_large_domain_name_packets"].(bool),
+		DropLongLabelPackets:       dnsMap["drop_long_label_packets"].(bool),
+		MaxMessageLength:           dnsMap["max_message_length"].(int64),
 	}
 }
 

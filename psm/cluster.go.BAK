@@ -25,18 +25,16 @@ func resourceCluster() *schema.Resource {
 		Schema: map[string]*schema.Schema{
 			"name": {
 				Type:     schema.TypeString,
-				Optional: true,
+				Required: true,
 			},
 			"quorum_nodes": {
 				Type:     schema.TypeList,
 				Elem:     &schema.Schema{Type: schema.TypeString},
 				Optional: true,
-				Computed: true,
 			},
 			"virtual_ip": {
 				Type:     schema.TypeString,
 				Optional: true,
-				Computed: true,
 			},
 			"ntp_servers": {
 				Type:     schema.TypeList,
@@ -60,7 +58,6 @@ func resourceCluster() *schema.Resource {
 			"bootstrap_ipam_policy": {
 				Type:     schema.TypeString,
 				Optional: true,
-				Computed: true,
 			},
 			"sites": {
 				Type:     schema.TypeList,
@@ -71,11 +68,6 @@ func resourceCluster() *schema.Resource {
 				Type:     schema.TypeMap,
 				Optional: true,
 				Elem:     &schema.Schema{Type: schema.TypeString},
-			},
-			"certificate": {
-				Type:     schema.TypeString,
-				Optional: true,
-				Computed: true,
 			},
 		},
 	}
@@ -103,7 +95,6 @@ type Cluster struct {
 		Certs               string      `json:"certs"`
 		Key                 interface{} `json:"key"`
 		BootstrapIPAMPolicy interface{} `json:"bootstrap-ipam-policy"`
-		Certificate         string      `json:"certificate"`
 	} `json:"spec"`
 }
 
@@ -137,9 +128,6 @@ func resourceClusterCreate(ctx context.Context, d *schema.ResourceData, m interf
 	if v, ok := d.GetOk("bootstrap_ipam_policy"); ok {
 		cluster.Spec.BootstrapIPAMPolicy = v.(string)
 	}
-	if v, ok := d.GetOk("certificate"); ok {
-		cluster.Spec.Certificate = v.(string)
-	}
 
 	// Handle sites and system.multisite label
 	if sites, ok := d.GetOk("sites"); ok {
@@ -156,12 +144,11 @@ func resourceClusterCreate(ctx context.Context, d *schema.ResourceData, m interf
 		return diag.FromErr(err)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, "PUT", fmt.Sprintf("%s/configs/cluster/v1/cluster", config.Server), bytes.NewBuffer(jsonData))
+	req, err := http.NewRequestWithContext(ctx, "PUT", fmt.Sprintf("%s/configs/cluster/v1/cluster", config.Server), strings.NewReader(string(jsonData)))
 	if err != nil {
 		return diag.FromErr(err)
 	}
 
-	req.Header.Set("Content-Type", "application/json")
 	req.AddCookie(&http.Cookie{Name: "sid", Value: config.SID})
 
 	res, err := client.Do(req)
@@ -170,16 +157,8 @@ func resourceClusterCreate(ctx context.Context, d *schema.ResourceData, m interf
 	}
 	defer res.Body.Close()
 
-	if res.StatusCode == http.StatusPreconditionFailed {
-		return diag.Errorf("Cluster configuration already exists. Use 'terraform import' to manage existing cluster or remove the existing configuration.")
-	}
-
 	if res.StatusCode != http.StatusOK {
-		bodyBytes, err := io.ReadAll(res.Body)
-		if err != nil {
-			return diag.Errorf("failed to read error response body: %v", err)
-		}
-		return diag.Errorf("failed to create cluster: HTTP %d - %s", res.StatusCode, string(bodyBytes))
+		return diag.Errorf("failed to create cluster: %s", res.Status)
 	}
 
 	var createdCluster Cluster
@@ -215,11 +194,7 @@ func resourceClusterRead(ctx context.Context, d *schema.ResourceData, m interfac
 	}
 
 	if res.StatusCode != http.StatusOK {
-		bodyBytes, err := io.ReadAll(res.Body)
-		if err != nil {
-			return diag.Errorf("failed to read error response body: %v", err)
-		}
-		return diag.Errorf("failed to read cluster: HTTP %d - %s", res.StatusCode, string(bodyBytes))
+		return diag.Errorf("failed to read cluster: %s", res.Status)
 	}
 
 	var cluster Cluster
@@ -241,7 +216,6 @@ func resourceClusterRead(ctx context.Context, d *schema.ResourceData, m interfac
 	d.Set("auto_admit_dscs", cluster.Spec.AutoAdmitDSCs)
 	d.Set("certs", cluster.Spec.Certs)
 	d.Set("bootstrap_ipam_policy", cluster.Spec.BootstrapIPAMPolicy)
-	d.Set("certificate", cluster.Spec.Certificate)
 
 	return nil
 }
@@ -275,9 +249,6 @@ func resourceClusterUpdate(ctx context.Context, d *schema.ResourceData, m interf
 	}
 	if v, ok := d.GetOk("bootstrap_ipam_policy"); ok {
 		cluster.Spec.BootstrapIPAMPolicy = v.(string)
-	}
-	if v, ok := d.GetOk("certificate"); ok {
-		cluster.Spec.Certificate = v.(string)
 	}
 
 	// Handle sites and system.multisite label
