@@ -19,6 +19,9 @@ func resourceSyslogPolicy() *schema.Resource {
 		ReadContext:   resourceSyslogPolicyRead,
 		UpdateContext: resourceSyslogPolicyUpdate,
 		DeleteContext: resourceSyslogPolicyDelete,
+		Importer: &schema.ResourceImporter{
+			StateContext: resourceSyslogPolicyImport,
+		},
 		Schema: map[string]*schema.Schema{
 			"name": {
 				Type:     schema.TypeString,
@@ -389,4 +392,66 @@ func resourceSyslogPolicyDelete(ctx context.Context, d *schema.ResourceData, m i
 	d.SetId("")
 
 	return nil
+}
+
+func resourceSyslogPolicyImport(ctx context.Context, d *schema.ResourceData, m interface{}) ([]*schema.ResourceData, error) {
+	config := m.(*Config)
+	client := config.Client()
+
+	// The ID is expected to be the name of the Syslog Policy
+	fwlogPolicyName := d.Id()
+
+	req, err := http.NewRequestWithContext(ctx, "GET", config.Server+"/configs/monitoring/v1/tenant/default/fwlogPolicy/"+fwlogPolicyName, nil)
+	if err != nil {
+		return nil, fmt.Errorf("error creating request: %s", err)
+	}
+
+	req.AddCookie(&http.Cookie{Name: "sid", Value: config.SID})
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("error reading Syslog Policy: %s", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := ioutil.ReadAll(resp.Body)
+		return nil, fmt.Errorf("failed to read Syslog Policy: HTTP %d %s: %s", resp.StatusCode, resp.Status, bodyBytes)
+	}
+
+	responseBody := &SyslogPolicy{}
+	if err := json.NewDecoder(resp.Body).Decode(responseBody); err != nil {
+		return nil, fmt.Errorf("error decoding response: %s", err)
+	}
+
+	d.SetId(responseBody.Meta.UUID)
+	d.Set("name", responseBody.Meta.Name)
+	d.Set("format", responseBody.Spec.Format)
+	d.Set("filter", responseBody.Spec.Filter)
+
+	syslogConfig := []map[string]interface{}{
+		{
+			"facility":         responseBody.Spec.Config.FacilityOverride,
+			"disable_batching": responseBody.Spec.Config.DisableBatching,
+		},
+	}
+	d.Set("syslogconfig", syslogConfig)
+
+	psmTarget := []map[string]interface{}{
+		{
+			"enable": responseBody.Spec.PsmTarget.Enable,
+		},
+	}
+	d.Set("psm_target", psmTarget)
+
+	targets := make([]map[string]interface{}, len(responseBody.Spec.Targets))
+	for i, target := range responseBody.Spec.Targets {
+		targets[i] = map[string]interface{}{
+			"destination": target.Destination,
+			"transport":   target.Transport,
+		}
+	}
+	d.Set("targets", targets)
+
+	return []*schema.ResourceData{d}, nil
 }

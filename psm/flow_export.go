@@ -17,8 +17,11 @@ func resourceFlowExportPolicy() *schema.Resource {
 	return &schema.Resource{
 		CreateContext: resourceFlowExportPolicyCreate,
 		ReadContext:   resourceFlowExportPolicyRead,
-		DeleteContext: resourceFlowExportPolicyDelete,
 		UpdateContext: resourceFlowExportPolicyUpdate,
+		DeleteContext: resourceFlowExportPolicyDelete,
+		Importer: &schema.ResourceImporter{
+			StateContext: resourceFlowExportPolicyImport,
+		},
 		Schema: map[string]*schema.Schema{
 			"name": {
 				Type:     schema.TypeString,
@@ -298,4 +301,50 @@ func resourceFlowExportPolicyDelete(ctx context.Context, d *schema.ResourceData,
 	d.SetId("")
 
 	return nil
+}
+
+func resourceFlowExportPolicyImport(ctx context.Context, d *schema.ResourceData, m interface{}) ([]*schema.ResourceData, error) {
+	config := m.(*Config)
+	client := config.Client()
+
+	name := d.Id()
+
+	url := fmt.Sprintf("%s/configs/monitoring/v1/tenant/default/flowExportPolicy/%s", config.Server, name)
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("error creating request: %s", err)
+	}
+
+	req.AddCookie(&http.Cookie{Name: "sid", Value: config.SID})
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("error reading FlowExportPolicy: %s", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("failed to read FlowExportPolicy: HTTP %s", resp.Status)
+	}
+
+	flowExportPolicy := &FlowExportPolicy{}
+	if err := json.NewDecoder(resp.Body).Decode(flowExportPolicy); err != nil {
+		return nil, fmt.Errorf("error decoding response: %s", err)
+	}
+
+	d.SetId(flowExportPolicy.Meta.UUID.(string))
+	d.Set("name", flowExportPolicy.Meta.Name)
+	d.Set("interval", flowExportPolicy.Spec.Interval)
+	d.Set("format", flowExportPolicy.Spec.Format)
+
+	exports := make([]map[string]interface{}, len(flowExportPolicy.Spec.Exports))
+	for i, export := range flowExportPolicy.Spec.Exports {
+		exports[i] = map[string]interface{}{
+			"destination": export.Destination,
+			"transport":   export.Transport,
+		}
+	}
+	d.Set("target", exports)
+
+	return []*schema.ResourceData{d}, nil
 }
