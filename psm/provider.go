@@ -26,6 +26,7 @@ func Provider() *schema.Provider {
 			"psm_cluster":              resourceCluster(),
 			"psm_rule_profile":         resourceRuleProfile(),
 			"psm_dss":                  resourceDistributedServiceCard(),
+			"psm_pdt":                  resourcePolicyDistributionTarget(),
 		},
 		Schema: map[string]*schema.Schema{
 			"user": {
