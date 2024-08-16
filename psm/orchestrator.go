@@ -5,7 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"log"
 	"net/http"
 
@@ -35,11 +35,6 @@ func resourceOrchestrator() *schema.Resource {
 				Required: true,
 				ForceNew: false,
 			},
-			"auth_type": {
-				Type:     schema.TypeString,
-				Optional: true,
-				ForceNew: false,
-			},
 			"username": {
 				Type:     schema.TypeString,
 				Required: true,
@@ -47,30 +42,19 @@ func resourceOrchestrator() *schema.Resource {
 			},
 			"password": {
 				Type:      schema.TypeString,
-				Optional:  true,
+				Required:  true,
 				ForceNew:  false,
 				Sensitive: true,
-				//ValidateFunc: validation.StringLenBetween(8, 100),
-			},
-			"cert_data": {
-				Type:     schema.TypeString,
-				Optional: true,
-				ForceNew: false,
-			},
-			"cert_key": {
-				Type:     schema.TypeString,
-				Optional: true,
-				ForceNew: false,
 			},
 			"ca_data": {
 				Type:     schema.TypeString,
 				Optional: true,
 				ForceNew: false,
 			},
-			"disable_server_auth": {
+			"disable_server_authentication": {
 				Type:     schema.TypeBool,
 				Optional: true,
-				Default:  "true",
+				Default:  true,
 				ForceNew: false,
 			},
 			"namespaces": {
@@ -80,15 +64,11 @@ func resourceOrchestrator() *schema.Resource {
 					Schema: map[string]*schema.Schema{
 						"name": {
 							Type:     schema.TypeString,
-							Elem:     &schema.Schema{Type: schema.TypeString},
-							Optional: true,
-							Default:  "all_namespaces",
+							Required: true,
 						},
 						"mode": {
 							Type:     schema.TypeString,
-							Elem:     &schema.Schema{Type: schema.TypeString},
-							Optional: true,
-							Default:  "smartservicemonitored",
+							Required: true,
 						},
 					},
 				},
@@ -108,26 +88,23 @@ type Orchestrator struct {
 
 	Meta struct {
 		Name string `json:"name"`
-		UUID string `json:"uuid" default:"null"`
+		UUID string `json:"uuid,omitempty"`
 	} `json:"meta"`
 
 	Spec struct {
-		Type string `json:"type" default:"vcenter"`
+		Type string `json:"type"`
 		URI  string `json:"uri"`
 
 		Credentials struct {
-			AuthType          string `json:"auth-type" default:"username-password"`
-			Username          string `json:"username" default:"null"`
-			Password          string `json:"password" default:"null"`
-			BearerToken       string `json:"bearer-token" default:"null"`
-			CertData          string `json:"cert-data" default:"null"`
-			KeyData           string `json:"key-data" default:"null"`
-			CAData            string `json:"ca-data" default:"null"`
-			DisableServerAuth bool   `json:"disable-server-authentication" default:"true"`
+			AuthType                    string `json:"auth-type"`
+			Username                    string `json:"username"`
+			Password                    string `json:"password,omitempty"`
+			CAData                      string `json:"ca-data,omitempty"`
+			DisableServerAuthentication bool   `json:"disable-server-authentication"`
 		} `json:"credentials"`
 
-		Namespaces []Namespace `json:"namespaces"`
-	}
+		Namespaces []Namespace `json:"namespaces,omitempty"`
+	} `json:"spec"`
 }
 
 func resourceOrchestratorCreate(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
@@ -138,25 +115,39 @@ func resourceOrchestratorCreate(ctx context.Context, d *schema.ResourceData, m i
 	orchestrator.Meta.Name = d.Get("name").(string)
 	orchestrator.Spec.Type = d.Get("type").(string)
 	orchestrator.Spec.URI = d.Get("uri").(string)
-	orchestrator.Spec.Credentials.AuthType = d.Get("auth_type").(string)
+	orchestrator.Spec.Credentials.AuthType = "username-password"
 	orchestrator.Spec.Credentials.Username = d.Get("username").(string)
 	orchestrator.Spec.Credentials.Password = d.Get("password").(string)
-	orchestrator.Spec.Credentials.CertData = d.Get("cert_data").(string)
-	orchestrator.Spec.Credentials.KeyData = d.Get("cert_key").(string)
-	orchestrator.Spec.Credentials.CAData = d.Get("ca_data").(string)
-	orchestrator.Spec.Credentials.DisableServerAuth = d.Get("disable_server_auth").(bool)
 
-	if v, ok := d.GetOk("namespace"); ok {
-		for _, v := range v.([]interface{}) {
-			NamespaceMap, ok := v.(map[string]interface{})
-			if !ok {
-				return diag.Errorf("unexpected type for namespaces: %T", v)
+	caData, hasCaData := d.GetOk("ca_data")
+	disableServerAuth, hasDisableServerAuth := d.GetOk("disable_server_authentication")
+
+	if hasCaData {
+		orchestrator.Spec.Credentials.CAData = caData.(string)
+		orchestrator.Spec.Credentials.DisableServerAuthentication = false
+	} else if hasDisableServerAuth {
+		orchestrator.Spec.Credentials.DisableServerAuthentication = disableServerAuth.(bool)
+	} else {
+		orchestrator.Spec.Credentials.DisableServerAuthentication = true
+	}
+
+	if v, ok := d.GetOk("namespaces"); ok {
+		namespaces := v.([]interface{})
+		orchestrator.Spec.Namespaces = make([]Namespace, len(namespaces))
+		for i, ns := range namespaces {
+			namespace := ns.(map[string]interface{})
+			orchestrator.Spec.Namespaces[i] = Namespace{
+				Name: namespace["name"].(string),
+				Mode: namespace["mode"].(string),
 			}
-			namespaces := Namespace{
-				Name: NamespaceMap["name"].(string),
-				Mode: NamespaceMap["mode"].(string),
-			}
-			orchestrator.Spec.Namespaces = append(orchestrator.Spec.Namespaces, namespaces)
+		}
+	} else {
+		// Set default namespace if not specified
+		orchestrator.Spec.Namespaces = []Namespace{
+			{
+				Name: "all_namespaces",
+				Mode: "smartservicemonitored",
+			},
 		}
 	}
 
@@ -179,7 +170,10 @@ func resourceOrchestratorCreate(ctx context.Context, d *schema.ResourceData, m i
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		bodyBytes, _ := ioutil.ReadAll(resp.Body)
+		bodyBytes, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return diag.FromErr(fmt.Errorf("failed to read error response body: %v", err))
+		}
 		errMsg := fmt.Sprintf("failed to create Orchestrator integration: HTTP %d %s: %s", resp.StatusCode, resp.Status, bodyBytes)
 		return diag.Diagnostics{
 			{
@@ -197,14 +191,13 @@ func resourceOrchestratorCreate(ctx context.Context, d *schema.ResourceData, m i
 
 	d.SetId(responseBody.Meta.UUID)
 
-	return append(diag.Diagnostics{}, resourceOrchestratorRead(ctx, d, m)...)
+	return resourceOrchestratorRead(ctx, d, m)
 }
 
 func resourceOrchestratorRead(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
 	config := m.(*Config)
 	client := config.Client()
 
-	// Construct the URL for the Orchestrator based on its UUID
 	url := config.Server + "/configs/orchestration/v1/orchestrator/" + d.Get("name").(string)
 
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
@@ -230,17 +223,20 @@ func resourceOrchestratorRead(ctx context.Context, d *schema.ResourceData, m int
 		return diag.FromErr(err)
 	}
 
-	// Set the Terraform resource data
 	d.Set("name", orchestrator.Meta.Name)
 	d.Set("type", orchestrator.Spec.Type)
 	d.Set("uri", orchestrator.Spec.URI)
-	d.Set("auth_type", orchestrator.Spec.Credentials.AuthType)
 	d.Set("username", orchestrator.Spec.Credentials.Username)
-	d.Set("password", orchestrator.Spec.Credentials.Password)
-	d.Set("cert_data", orchestrator.Spec.Credentials.CertData)
-	d.Set("cert_key", orchestrator.Spec.Credentials.KeyData)
 	d.Set("ca_data", orchestrator.Spec.Credentials.CAData)
-	d.Set("disable_server_auth", orchestrator.Spec.Credentials.DisableServerAuth)
+
+	namespaces := make([]map[string]interface{}, len(orchestrator.Spec.Namespaces))
+	for i, ns := range orchestrator.Spec.Namespaces {
+		namespaces[i] = map[string]interface{}{
+			"name": ns.Name,
+			"mode": ns.Mode,
+		}
+	}
+	d.Set("namespaces", namespaces)
 
 	return nil
 }
@@ -249,73 +245,88 @@ func resourceOrchestratorUpdate(ctx context.Context, d *schema.ResourceData, m i
 	config := m.(*Config)
 	client := config.Client()
 
-	// Construct the URL for the network based on its name attached at the end
 	url := config.Server + "/configs/orchestration/v1/orchestrator/" + d.Get("name").(string)
 
-	// Get the current state of the resource
 	orchestratorCurrent := &Orchestrator{}
-
-	// Populate the orchestrator object with the new values
 	orchestratorCurrent.Meta.Name = d.Get("name").(string)
 	orchestratorCurrent.Spec.Type = d.Get("type").(string)
 	orchestratorCurrent.Spec.URI = d.Get("uri").(string)
-	orchestratorCurrent.Spec.Credentials.AuthType = d.Get("auth_type").(string)
+	orchestratorCurrent.Spec.Credentials.AuthType = "username-password"
 	orchestratorCurrent.Spec.Credentials.Username = d.Get("username").(string)
 	orchestratorCurrent.Spec.Credentials.Password = d.Get("password").(string)
-	orchestratorCurrent.Spec.Credentials.CertData = d.Get("cert_data").(string)
-	orchestratorCurrent.Spec.Credentials.KeyData = d.Get("cert_key").(string)
-	orchestratorCurrent.Spec.Credentials.CAData = d.Get("ca_data").(string)
-	orchestratorCurrent.Spec.Credentials.DisableServerAuth = d.Get("disable_server_auth").(bool)
 
-	if v, ok := d.GetOk("namespace"); ok {
-		for _, v := range v.([]interface{}) {
-			NamespaceMap, ok := v.(map[string]interface{})
-			if !ok {
-				return diag.Errorf("unexpected type for namespaces: %T", v)
+	caData, hasCaData := d.GetOk("ca_data")
+	disableServerAuth, hasDisableServerAuth := d.GetOk("disable_server_authentication")
+
+	if hasCaData {
+		orchestratorCurrent.Spec.Credentials.CAData = caData.(string)
+		orchestratorCurrent.Spec.Credentials.DisableServerAuthentication = false
+	} else if hasDisableServerAuth {
+		orchestratorCurrent.Spec.Credentials.DisableServerAuthentication = disableServerAuth.(bool)
+	} else {
+		orchestratorCurrent.Spec.Credentials.DisableServerAuthentication = true
+	}
+
+	if v, ok := d.GetOk("namespaces"); ok {
+		namespaces := v.([]interface{})
+		orchestratorCurrent.Spec.Namespaces = make([]Namespace, len(namespaces))
+		for i, ns := range namespaces {
+			namespace := ns.(map[string]interface{})
+			orchestratorCurrent.Spec.Namespaces[i] = Namespace{
+				Name: namespace["name"].(string),
+				Mode: namespace["mode"].(string),
 			}
-			namespaces := Namespace{
-				Name: NamespaceMap["name"].(string),
-				Mode: NamespaceMap["mode"].(string),
-			}
-			orchestratorCurrent.Spec.Namespaces = append(orchestratorCurrent.Spec.Namespaces, namespaces)
+		}
+	} else {
+		// Set default namespace if not specified
+		orchestratorCurrent.Spec.Namespaces = []Namespace{
+			{
+				Name: "all_namespaces",
+				Mode: "smartservicemonitored",
+			},
 		}
 	}
 
-	// Convert the orchestrator object to JSON
 	jsonBytes, err := json.Marshal(orchestratorCurrent)
 	if err != nil {
 		return diag.FromErr(err)
 	}
-	log.Printf("[DEBUG] Request JSON: %s\n", jsonBytes)
+	log.Printf("[DEBUG] Update Request JSON: %s\n", jsonBytes)
 
-	// Create a new HTTP request
 	req, err := http.NewRequestWithContext(ctx, "PUT", url, bytes.NewBuffer(jsonBytes))
 	if err != nil {
 		return diag.FromErr(err)
 	}
 
-	// Set SID cookie for authentication
 	req.AddCookie(&http.Cookie{Name: "sid", Value: config.SID})
 
-	// Send the HTTP request
 	resp, err := client.Do(req)
 	if err != nil {
 		return diag.FromErr(err)
 	}
 	defer resp.Body.Close()
 
-	// Check the HTTP response
 	if resp.StatusCode != http.StatusOK {
-		return diag.Errorf("failed to update Orchestrator integration: HTTP %s", resp.Status)
+		bodyBytes, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return diag.FromErr(fmt.Errorf("failed to read error response body: %v", err))
+		}
+		errMsg := fmt.Sprintf("failed to update Orchestrator integration: HTTP %d %s: %s", resp.StatusCode, resp.Status, bodyBytes)
+		return diag.Diagnostics{
+			{
+				Severity: diag.Error,
+				Summary:  "Orchestrator Integration update failed",
+				Detail:   errMsg,
+			},
+		}
 	}
 
 	responseBody := &Orchestrator{}
 	if err := json.NewDecoder(resp.Body).Decode(responseBody); err != nil {
 		return diag.FromErr(err)
 	}
-	log.Printf("[DEBUG] Response: %+v\n", responseBody)
+	log.Printf("[DEBUG] Update Response: %+v\n", responseBody)
 
-	// No changes to the resource data, so just call the Read function to sync the state
 	return resourceOrchestratorRead(ctx, d, m)
 }
 
@@ -323,7 +334,6 @@ func resourceOrchestratorDelete(ctx context.Context, d *schema.ResourceData, m i
 	config := m.(*Config)
 	client := config.Client()
 
-	// Construct the URL for the Orchestrator based on its name
 	url := config.Server + "/configs/orchestration/v1/orchestrator/" + d.Get("name").(string)
 
 	req, err := http.NewRequestWithContext(ctx, "DELETE", url, nil)
@@ -343,7 +353,6 @@ func resourceOrchestratorDelete(ctx context.Context, d *schema.ResourceData, m i
 		return diag.Errorf("Failed to delete Orchestrator: HTTP %s", resp.Status)
 	}
 
-	// Remove the resource from the Terraform state
 	d.SetId("")
 
 	return nil
