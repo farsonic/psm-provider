@@ -50,3 +50,11 @@ func getStringSlice(m map[string]interface{}, key string) []string {
 	}
 	return nil
 }
+
+func expandStringList(list []interface{}) []string {
+	result := make([]string, len(list))
+	for i, v := range list {
+		result[i] = v.(string)
+	}
+	return result
+}

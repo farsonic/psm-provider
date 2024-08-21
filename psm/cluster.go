@@ -331,11 +331,3 @@ func resourceClusterImport(ctx context.Context, d *schema.ResourceData, m interf
 	d.SetId("cluster")
 	return []*schema.ResourceData{d}, nil
 }
-
-func expandStringList(list []interface{}) []string {
-	result := make([]string, len(list))
-	for i, v := range list {
-		result[i] = v.(string)
-	}
-	return result
-}

@@ -28,6 +28,7 @@ func Provider() *schema.Provider {
 			"psm_dss":                  resourceDistributedServiceCard(),
 			"psm_pdt":                  resourcePolicyDistributionTarget(),
 			"psm_uiglobalsettings":     resourcePSMUIGlobalSettings(),
+			"psm_authpolicy":           resourceAuthnPolicy(),
 		},
 		Schema: map[string]*schema.Schema{
 			"user": {
