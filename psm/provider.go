@@ -29,6 +29,9 @@ func Provider() *schema.Provider {
 			"psm_pdt":                  resourcePolicyDistributionTarget(),
 			"psm_uiglobalsettings":     resourcePSMUIGlobalSettings(),
 			"psm_authpolicy":           resourceAuthnPolicy(),
+			"psm_user":                 resourceUser(),
+			"psm_user_role":            resourceRole(),
+			"psm_role_binding":         resourceRoleBinding(),
 		},
 		Schema: map[string]*schema.Schema{
 			"user": {
@@ -61,7 +64,6 @@ func Provider() *schema.Provider {
 }
 
 func providerConfigure(ctx context.Context, d *schema.ResourceData) (interface{}, diag.Diagnostics) {
-	//... existing logic
 	config := &Config{
 		User:     d.Get("user").(string),
 		Password: d.Get("password").(string),

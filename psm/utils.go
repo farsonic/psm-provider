@@ -1,19 +1,21 @@
 package psm
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+)
 
 // convertToStringSlice converts various input types to a slice of strings
 func convertToStringSlice(input interface{}) []string {
 	var result []string
 	inputSlice, ok := input.([]interface{})
 	if !ok {
-		// handle the error accordingly
 		return result
 	}
 	for _, v := range inputSlice {
 		str, ok := v.(string)
 		if !ok {
-			// handle the error accordingly
 			continue
 		}
 		result = append(result, str)
@@ -57,4 +59,21 @@ func expandStringList(list []interface{}) []string {
 		result[i] = v.(string)
 	}
 	return result
+}
+
+func ExpandStringSet(set *schema.Set) []string {
+	list := set.List()
+	result := make([]string, len(list))
+	for i, v := range list {
+		result[i] = v.(string)
+	}
+	return result
+}
+
+func FlattenStringList(list []string) *schema.Set {
+	set := schema.NewSet(schema.HashString, []interface{}{})
+	for _, v := range list {
+		set.Add(v)
+	}
+	return set
 }

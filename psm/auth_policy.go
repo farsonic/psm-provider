@@ -485,7 +485,9 @@ func resourceAuthnPolicyRead(ctx context.Context, d *schema.ResourceData, m inte
 			"failed_login_attempts_duration": authnPolicy.Spec.Authenticators.Local.FailedLoginAttemptsDuration,
 		},
 	}
-	d.Set("local", localConfig)
+	if err := d.Set("local", localConfig); err != nil {
+		return diag.FromErr(err)
+	}
 
 	// Set LDAP domains
 	ldapDomains := make([]map[string]interface{}, len(authnPolicy.Spec.Authenticators.LDAP.Domains))
@@ -525,7 +527,9 @@ func resourceAuthnPolicyRead(ctx context.Context, d *schema.ResourceData, m inte
 		}
 		ldapDomains[i]["servers"] = servers
 	}
-	d.Set("ldap", ldapDomains)
+	if err := d.Set("ldap", ldapDomains); err != nil {
+		return diag.FromErr(err)
+	}
 
 	// Set RADIUS domains
 	radiusDomains := make([]map[string]interface{}, len(authnPolicy.Spec.Authenticators.Radius.Domains))
@@ -545,7 +549,9 @@ func resourceAuthnPolicyRead(ctx context.Context, d *schema.ResourceData, m inte
 		}
 		radiusDomains[i]["servers"] = servers
 	}
-	d.Set("radius", radiusDomains)
+	if err := d.Set("radius", radiusDomains); err != nil {
+		return diag.FromErr(err)
+	}
 
 	return nil
 }
@@ -591,6 +597,13 @@ func resourceAuthnPolicyUpdate(ctx context.Context, d *schema.ResourceData, m in
 
 	if d.HasChange("authenticator_order") {
 		updatedPolicy.Spec.Authenticators.AuthenticatorOrder = expandStringList(d.Get("authenticator_order").([]interface{}))
+	}
+
+	if d.HasChange("local") {
+		local := d.Get("local").([]interface{})[0].(map[string]interface{})
+		updatedPolicy.Spec.Authenticators.Local.PasswordLength = local["password_length"].(int)
+		updatedPolicy.Spec.Authenticators.Local.AllowedFailedLoginAttempts = local["allowed_failed_login_attempts"].(int)
+		updatedPolicy.Spec.Authenticators.Local.FailedLoginAttemptsDuration = local["failed_login_attempts_duration"].(string)
 	}
 
 	if d.HasChange("ldap") {
