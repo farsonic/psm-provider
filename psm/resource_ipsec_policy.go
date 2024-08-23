@@ -336,32 +336,25 @@ func resourceIPSecPolicyCreate(ctx context.Context, d *schema.ResourceData, m in
 	}
 
 	// Decode the response
-	var createdTunnel Tunnel
-	if err := json.NewDecoder(resp.Body).Decode(&createdTunnel); err != nil {
+	var updatedTunnel Tunnel
+	if err := json.NewDecoder(resp.Body).Decode(&updatedTunnel); err != nil {
 		return diag.FromErr(fmt.Errorf("error decoding response: %v", err))
 	}
 
-	// Set the resource ID
-	if createdTunnel.Meta.UUID != nil {
-		d.SetId(*createdTunnel.Meta.UUID)
-	} else {
-		return diag.Errorf("Created tunnel has no UUID")
-	}
-
-	if err := d.Set("kind", *tunnel.Kind); err != nil {
+	// Update the Terraform state with the returned data
+	if err := d.Set("kind", *updatedTunnel.Kind); err != nil {
 		return diag.FromErr(err)
 	}
-	if err := d.Set("api_version", *tunnel.APIVersion); err != nil {
+	if err := d.Set("api_version", *updatedTunnel.APIVersion); err != nil {
 		return diag.FromErr(err)
 	}
-	if err := d.Set("display_name", tunnel.Meta.DisplayName); err != nil {
+	if err := d.Set("display_name", updatedTunnel.Meta.DisplayName); err != nil {
 		return diag.FromErr(err)
 	}
-	if err := d.Set("tunnel", flattenSpec(&tunnel.Spec)); err != nil {
+	if err := d.Set("tunnel", flattenSpec(&updatedTunnel.Spec, d)); err != nil {
 		return diag.FromErr(err)
 	}
 
-	d.SetId(*createdTunnel.Meta.UUID)
 	return resourceIPSecPolicyRead(ctx, d, m)
 }
 
@@ -371,13 +364,13 @@ func resourceIPSecPolicyRead(ctx context.Context, d *schema.ResourceData, m inte
 
 	req, err := http.NewRequestWithContext(ctx, "GET", fmt.Sprintf("%s/configs/security/v1/tenant/default/ipsecpolicies/%s", config.Server, d.Id()), nil)
 	if err != nil {
-		return diag.FromErr(err)
+		return diag.FromErr(fmt.Errorf("error creating request: %v", err))
 	}
 
 	req.AddCookie(&http.Cookie{Name: "sid", Value: config.SID})
 	response, err := client.Do(req)
 	if err != nil {
-		return diag.FromErr(err)
+		return diag.FromErr(fmt.Errorf("error sending request: %v", err))
 	}
 	defer response.Body.Close()
 
@@ -391,22 +384,25 @@ func resourceIPSecPolicyRead(ctx context.Context, d *schema.ResourceData, m inte
 		return diag.Errorf("Failed to read IPSec Policy: HTTP %d %s: %s", response.StatusCode, response.Status, bodyBytes)
 	}
 
-	tunnel := &Tunnel{}
-	if err := json.NewDecoder(response.Body).Decode(tunnel); err != nil {
-		return diag.FromErr(err)
+	var tunnel Tunnel
+	if err := json.NewDecoder(response.Body).Decode(&tunnel); err != nil {
+		return diag.FromErr(fmt.Errorf("error decoding response: %v", err))
 	}
 
-	if err := d.Set("kind", *tunnel.Kind); err != nil {
-		return diag.FromErr(err)
+	if err := d.Set("kind", tunnel.Kind); err != nil {
+		return diag.FromErr(fmt.Errorf("error setting kind: %v", err))
 	}
-	if err := d.Set("api_version", *tunnel.APIVersion); err != nil {
-		return diag.FromErr(err)
+	if err := d.Set("api_version", tunnel.APIVersion); err != nil {
+		return diag.FromErr(fmt.Errorf("error setting api_version: %v", err))
 	}
 	if err := d.Set("display_name", tunnel.Meta.DisplayName); err != nil {
-		return diag.FromErr(err)
+		return diag.FromErr(fmt.Errorf("error setting display_name: %v", err))
 	}
-	if err := d.Set("tunnel", flattenSpec(&tunnel.Spec)); err != nil {
-		return diag.FromErr(err)
+
+	flattenedSpec := flattenSpec(&tunnel.Spec, d)
+
+	if err := d.Set("tunnel", flattenedSpec); err != nil {
+		return diag.FromErr(fmt.Errorf("error setting tunnel: %v", err))
 	}
 
 	return nil
@@ -454,7 +450,6 @@ func resourceIPSecPolicyUpdate(ctx context.Context, d *schema.ResourceData, m in
 		return diag.Errorf("error updating IPSec Policy: API returned status code %d: %s", resp.StatusCode, string(bodyBytes))
 	}
 
-	// Decode the response
 	var updatedTunnel Tunnel
 	if err := json.NewDecoder(resp.Body).Decode(&updatedTunnel); err != nil {
 		return diag.FromErr(fmt.Errorf("error decoding response: %v", err))
@@ -470,7 +465,7 @@ func resourceIPSecPolicyUpdate(ctx context.Context, d *schema.ResourceData, m in
 	if err := d.Set("display_name", updatedTunnel.Meta.DisplayName); err != nil {
 		return diag.FromErr(err)
 	}
-	if err := d.Set("tunnel", flattenSpec(&updatedTunnel.Spec)); err != nil {
+	if err := d.Set("tunnel", flattenSpec(&updatedTunnel.Spec, d)); err != nil {
 		return diag.FromErr(err)
 	}
 
@@ -553,10 +548,10 @@ func resourceIPSecPolicyImport(ctx context.Context, d *schema.ResourceData, m in
 	if err := d.Set("api_version", importedTunnel.APIVersion); err != nil {
 		return nil, err
 	}
-	if err := d.Set("meta", flattenMeta(&importedTunnel.Meta)); err != nil {
+	if err := d.Set("display_name", importedTunnel.Meta.DisplayName); err != nil {
 		return nil, err
 	}
-	if err := d.Set("spec", flattenSpec(&importedTunnel.Spec)); err != nil {
+	if err := d.Set("tunnel", flattenSpec(&importedTunnel.Spec, d)); err != nil {
 		return nil, err
 	}
 

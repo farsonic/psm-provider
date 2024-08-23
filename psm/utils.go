@@ -78,15 +78,6 @@ func FlattenStringList(list []string) *schema.Set {
 	return set
 }
 
-func expandMeta(metaData map[string]interface{}) TunnelMeta {
-	return TunnelMeta{
-		Name:        getStringOrEmpty(metaData, "name"),
-		Tenant:      getStringOrEmpty(metaData, "tenant"),
-		Namespace:   getStringOrEmpty(metaData, "namespace"),
-		DisplayName: getStringOrEmpty(metaData, "display_name"),
-	}
-}
-
 func expandSpec(d *schema.ResourceData) TunnelSpec {
 	tunnelData := d.Get("tunnel").([]interface{})[0].(map[string]interface{})
 
@@ -171,144 +162,77 @@ func stringPtr(s string) *string {
 	return &s
 }
 
-func flattenMeta(meta *TunnelMeta) []interface{} {
-	m := map[string]interface{}{
-		"name":         meta.Name,
-		"tenant":       meta.Tenant,
-		"namespace":    meta.Namespace,
-		"display_name": meta.DisplayName,
-	}
-	return []interface{}{m}
-}
+func flattenSpec(spec *TunnelSpec, d *schema.ResourceData) []interface{} {
+	m := make(map[string]interface{})
 
-func flattenSpec(spec *TunnelSpec) []interface{} {
-	tunnel := map[string]interface{}{
-		"ha_mode":                     spec.HAMode,
-		"tunnel_endpoints":            flattenTunnelEndpoints(spec.TunnelEndpoints),
-		"policy_distribution_targets": spec.PolicyDistributionTargets,
-		"disable_tcp_mss_adjust":      spec.DisableTCPMSSAdjust,
+	m["ha_mode"] = spec.HAMode
+	m["policy_distribution_targets"] = spec.PolicyDistributionTargets
+	m["disable_tcp_mss_adjust"] = spec.DisableTCPMSSAdjust
+
+	// Only include lifetime if it exists in the current state
+	if v, ok := d.GetOk("tunnel.0.lifetime"); ok {
+		m["lifetime"] = v.([]interface{})
 	}
 
-	if spec.Config != nil {
-		tunnel["lifetime"] = []interface{}{
+	tunnelEndpoints := make([]interface{}, len(spec.TunnelEndpoints))
+	for i, endpoint := range spec.TunnelEndpoints {
+		endpointMap := make(map[string]interface{})
+		endpointMap["interface_name"] = endpoint.InterfaceName
+		endpointMap["dse"] = endpoint.DSE
+		endpointMap["ike_version"] = endpoint.IKEVersion
+
+		if endpoint.IKESA != nil {
+			ikesa := make(map[string]interface{})
+			ikesa["encryption_algorithms"] = endpoint.IKESA.EncryptionAlgorithms
+			ikesa["hash_algorithms"] = endpoint.IKESA.HashAlgorithms
+			ikesa["dh_groups"] = endpoint.IKESA.DHGroups
+			ikesa["rekey_lifetime"] = endpoint.IKESA.RekeyLifetime
+			ikesa["reauth_lifetime"] = endpoint.IKESA.ReauthLifetime
+			ikesa["dpd_delay"] = endpoint.IKESA.DPDDelay
+			ikesa["ikev1_dpd_timeout"] = endpoint.IKESA.IKEV1DPDTimeout
+			ikesa["ike_initiator"] = endpoint.IKESA.IKEInitiator
+			ikesa["auth_type"] = endpoint.IKESA.AuthType
+			if endpoint.IKESA.LocalIdentityCertificates != "" {
+				ikesa["local_identity_certificates"] = endpoint.IKESA.LocalIdentityCertificates
+			}
+			if len(endpoint.IKESA.RemoteCACertificates) > 0 {
+				ikesa["remote_ca_certificates"] = endpoint.IKESA.RemoteCACertificates
+			}
+
+			// Preserve pre_shared_key if it exists in the current state
+			if v, ok := d.GetOk(fmt.Sprintf("tunnel.0.tunnel_endpoints.%d.ike_sa.0.pre_shared_key", i)); ok {
+				ikesa["pre_shared_key"] = v.(string)
+			}
+
+			endpointMap["ike_sa"] = []interface{}{ikesa}
+		}
+
+		if endpoint.IPSECSA != nil {
+			ipsecsa := make(map[string]interface{})
+			ipsecsa["encryption_algorithms"] = endpoint.IPSECSA.EncryptionAlgorithms
+			ipsecsa["dh_groups"] = endpoint.IPSECSA.DHGroups
+			ipsecsa["rekey_lifetime"] = endpoint.IPSECSA.RekeyLifetime
+			endpointMap["ipsec_sa"] = []interface{}{ipsecsa}
+		}
+
+		endpointMap["local_identifier"] = []interface{}{
 			map[string]interface{}{
-				"sa_lifetime":  spec.Config.SALifetime,
-				"ike_lifetime": spec.Config.IKELifetime,
+				"type":  endpoint.LocalIdentifier.Type,
+				"value": endpoint.LocalIdentifier.Value,
 			},
 		}
-	}
 
-	return []interface{}{tunnel}
-}
-
-func expandConfig(configData map[string]interface{}) *TunnelConfig {
-	return &TunnelConfig{
-		SALifetime:  getStringOrEmpty(configData, "sa_lifetime"),
-		IKELifetime: getStringOrEmpty(configData, "ike_lifetime"),
-	}
-}
-
-func flattenConfig(config *TunnelConfig) []interface{} {
-	return []interface{}{
-		map[string]interface{}{
-			"sa_lifetime":  config.SALifetime,
-			"ike_lifetime": config.IKELifetime,
-		},
-	}
-}
-
-func flattenTunnelEndpoints(endpoints []TunnelEndpoint) []interface{} {
-	var result []interface{}
-	for _, endpoint := range endpoints {
-		e := map[string]interface{}{
-			"interface_name":    endpoint.InterfaceName,
-			"dse":               endpoint.DSE,
-			"ike_version":       endpoint.IKEVersion,
-			"ike_sa":            flattenIKESA(endpoint.IKESA),
-			"ipsec_sa":          flattenIPSECSA(endpoint.IPSECSA),
-			"local_identifier":  flattenIdentifier(endpoint.LocalIdentifier),
-			"remote_identifier": flattenIdentifier(endpoint.RemoteIdentifier),
+		endpointMap["remote_identifier"] = []interface{}{
+			map[string]interface{}{
+				"type":  endpoint.RemoteIdentifier.Type,
+				"value": endpoint.RemoteIdentifier.Value,
+			},
 		}
-		result = append(result, e)
-	}
-	return result
-}
 
-func flattenIKESA(ikesa *IKESA) []interface{} {
-	if ikesa == nil {
-		return nil
-	}
-	m := map[string]interface{}{
-		"encryption_algorithms": ikesa.EncryptionAlgorithms,
-		"hash_algorithms":       ikesa.HashAlgorithms,
-		"dh_groups":             ikesa.DHGroups,
-		"rekey_lifetime":        ikesa.RekeyLifetime,
-		"reauth_lifetime":       ikesa.ReauthLifetime,
-		"dpd_delay":             ikesa.DPDDelay,
-		"ikev1_dpd_timeout":     ikesa.IKEV1DPDTimeout,
-		"ike_initiator":         ikesa.IKEInitiator,
-		"auth_type":             ikesa.AuthType,
+		tunnelEndpoints[i] = endpointMap
 	}
 
-	if ikesa.PreSharedKey != "" {
-		m["pre_shared_key"] = ikesa.PreSharedKey
-	}
-
-	if ikesa.AuthType == "certificates" {
-		m["local_identity_certificates"] = ikesa.LocalIdentityCertificates
-		m["remote_ca_certificates"] = ikesa.RemoteCACertificates
-	}
+	m["tunnel_endpoints"] = tunnelEndpoints
 
 	return []interface{}{m}
-}
-
-func flattenIPSECSA(ipsecsa *IPSECSA) []interface{} {
-	if ipsecsa == nil {
-		return nil
-	}
-	return []interface{}{map[string]interface{}{
-		"encryption_algorithms": ipsecsa.EncryptionAlgorithms,
-		"dh_groups":             ipsecsa.DHGroups,
-		"rekey_lifetime":        ipsecsa.RekeyLifetime,
-	}}
-}
-
-func flattenIdentifier(identifier Identifier) []interface{} {
-	return []interface{}{map[string]interface{}{
-		"type":  identifier.Type,
-		"value": identifier.Value,
-	}}
-}
-
-func expandMetaForUpdate(metaData map[string]interface{}) TunnelMeta {
-	meta := TunnelMeta{}
-	if labels, ok := metaData["labels"].(map[string]interface{}); ok {
-		meta.Labels = &labels
-	}
-	// Add other fields that should be updatable
-	if name, ok := metaData["name"].(string); ok {
-		meta.Name = name
-	}
-	if displayName, ok := metaData["display_name"].(string); ok {
-		meta.DisplayName = displayName
-	}
-	return meta
-}
-
-func expandSpecForUpdate(specData map[string]interface{}) TunnelSpec {
-	spec := TunnelSpec{
-		HAMode:                    getStringOrEmpty(specData, "ha_mode"),
-		TunnelEndpoints:           expandTunnelEndpoints(specData["tunnel_endpoints"].([]interface{})),
-		PolicyDistributionTargets: convertToStringSlice(specData["policy_distribution_targets"].([]interface{})),
-		DisableTCPMSSAdjust:       getBoolOrDefault(specData, "disable_tcp_mss_adjust", false),
-	}
-
-	if config, ok := specData["config"].(map[string]interface{}); ok {
-		spec.Config = &TunnelConfig{
-			SALifetime:  getStringOrEmpty(config, "sa-lifetime"),
-			IKELifetime: getStringOrEmpty(config, "ike-lifetime"),
-		}
-	}
-
-	return spec
 }
