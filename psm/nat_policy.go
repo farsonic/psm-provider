@@ -38,15 +38,17 @@ func resourceNATPolicy() *schema.Resource {
 						"disable": {
 							Type:     schema.TypeBool,
 							Optional: true,
+							Default:  false,
 						},
 						"type": {
 							Type:     schema.TypeString,
-							Required: true,
+							Optional: true,
+							Default:  "static",
 						},
 						"source": {
 							Type:     schema.TypeList,
-							MaxItems: 1,
 							Required: true,
+							MaxItems: 1,
 							Elem: &schema.Resource{
 								Schema: map[string]*schema.Schema{
 									"addresses": {
@@ -64,8 +66,8 @@ func resourceNATPolicy() *schema.Resource {
 						},
 						"destination": {
 							Type:     schema.TypeList,
-							MaxItems: 1,
 							Required: true,
+							MaxItems: 1,
 							Elem: &schema.Resource{
 								Schema: map[string]*schema.Schema{
 									"addresses": {
@@ -100,8 +102,8 @@ func resourceNATPolicy() *schema.Resource {
 						},
 						"translated_source": {
 							Type:     schema.TypeList,
+							Optional: true,
 							MaxItems: 1,
-							Required: true,
 							Elem: &schema.Resource{
 								Schema: map[string]*schema.Schema{
 									"addresses": {
@@ -119,8 +121,8 @@ func resourceNATPolicy() *schema.Resource {
 						},
 						"translated_destination": {
 							Type:     schema.TypeList,
+							Optional: true,
 							MaxItems: 1,
-							Required: true,
 							Elem: &schema.Resource{
 								Schema: map[string]*schema.Schema{
 									"addresses": {
@@ -138,7 +140,7 @@ func resourceNATPolicy() *schema.Resource {
 						},
 						"translated_destination_port": {
 							Type:     schema.TypeString,
-							Required: true,
+							Optional: true,
 						},
 					},
 				},
@@ -163,34 +165,38 @@ type NATPolicy struct {
 		DisplayName string `json:"display-name"`
 	} `json:"meta"`
 	Spec struct {
-		Rules []struct {
-			Name    string `json:"name"`
-			Disable bool   `json:"disable,omitempty"`
-			Type    string `json:"type"`
-			Source  struct {
-				Addresses     []string `json:"addresses,omitempty"`
-				IPCollections []string `json:"ipcollections,omitempty"`
-			} `json:"source"`
-			Destination struct {
-				Addresses     []string `json:"addresses,omitempty"`
-				IPCollections []string `json:"ipcollections,omitempty"`
-			} `json:"destination"`
-			DestinationProtoPort struct {
-				Protocol string `json:"protocol"`
-				Ports    string `json:"ports"`
-			} `json:"destination-proto-port"`
-			TranslatedSource struct {
-				Addresses     []string `json:"addresses,omitempty"`
-				IPCollections []string `json:"ipcollections,omitempty"`
-			} `json:"translated-source"`
-			TranslatedDestination struct {
-				Addresses     []string `json:"addresses,omitempty"`
-				IPCollections []string `json:"ipcollections,omitempty"`
-			} `json:"translated-destination"`
-			TranslatedDestinationPort string `json:"translated-destination-port"`
-		} `json:"rules"`
-		PolicyDistributionTargets []string `json:"policy-distribution-targets"`
+		Rules                     []NatRule `json:"rules"`
+		PolicyDistributionTargets []string  `json:"policy-distribution-targets"`
 	} `json:"spec"`
+}
+
+type NatRule struct {
+	Name    string `json:"name"`
+	Disable bool   `json:"disable,omitempty"`
+	Type    string `json:"type"`
+	Source  struct {
+		Addresses     []string `json:"addresses,omitempty"`
+		IPCollections []string `json:"ipcollections,omitempty"`
+		Any           bool     `json:"any,omitempty"`
+	} `json:"source"`
+	Destination struct {
+		Addresses     []string `json:"addresses,omitempty"`
+		IPCollections []string `json:"ipcollections,omitempty"`
+		Any           bool     `json:"any,omitempty"`
+	} `json:"destination"`
+	DestinationProtoPort struct {
+		Protocol string `json:"protocol"`
+		Ports    string `json:"ports"`
+	} `json:"destination-proto-port"`
+	TranslatedSource *struct {
+		Addresses     []string `json:"addresses,omitempty"`
+		IPCollections []string `json:"ipcollections,omitempty"`
+	} `json:"translated-source,omitempty"`
+	TranslatedDestination *struct {
+		Addresses     []string `json:"addresses,omitempty"`
+		IPCollections []string `json:"ipcollections,omitempty"`
+	} `json:"translated-destination,omitempty"`
+	TranslatedDestinationPort string `json:"translated-destination-port,omitempty"`
 }
 
 func resourceNATPolicyCreate(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
@@ -206,60 +212,72 @@ func resourceNATPolicyCreate(ctx context.Context, d *schema.ResourceData, m inte
 	natPolicy.Meta.DisplayName = d.Get("display_name").(string)
 
 	rules := d.Get("rule").([]interface{})
-	natPolicy.Spec.Rules = make([]struct {
-		Name    string `json:"name"`
-		Disable bool   `json:"disable,omitempty"`
-		Type    string `json:"type"`
-		Source  struct {
-			Addresses     []string `json:"addresses,omitempty"`
-			IPCollections []string `json:"ipcollections,omitempty"`
-		} `json:"source"`
-		Destination struct {
-			Addresses     []string `json:"addresses,omitempty"`
-			IPCollections []string `json:"ipcollections,omitempty"`
-		} `json:"destination"`
-		DestinationProtoPort struct {
-			Protocol string `json:"protocol"`
-			Ports    string `json:"ports"`
-		} `json:"destination-proto-port"`
-		TranslatedSource struct {
-			Addresses     []string `json:"addresses,omitempty"`
-			IPCollections []string `json:"ipcollections,omitempty"`
-		} `json:"translated-source"`
-		TranslatedDestination struct {
-			Addresses     []string `json:"addresses,omitempty"`
-			IPCollections []string `json:"ipcollections,omitempty"`
-		} `json:"translated-destination"`
-		TranslatedDestinationPort string `json:"translated-destination-port"`
-	}, len(rules))
+	if err := validateNATRules(rules); err != nil {
+		return diag.FromErr(err)
+	}
 
-	for i, rule := range rules {
+	natPolicy.Spec.Rules = make([]NatRule, 0, len(rules))
+
+	for _, rule := range rules {
 		r := rule.(map[string]interface{})
-		natPolicy.Spec.Rules[i].Name = r["name"].(string)
-		natPolicy.Spec.Rules[i].Disable = r["disable"].(bool)
-		natPolicy.Spec.Rules[i].Type = r["type"].(string)
+		natRule := NatRule{
+			Name:    r["name"].(string),
+			Disable: r["disable"].(bool),
+			Type:    r["type"].(string),
+		}
 
-		source := r["source"].([]interface{})[0].(map[string]interface{})
-		natPolicy.Spec.Rules[i].Source.Addresses = expandStringList(source["addresses"].([]interface{}))
-		natPolicy.Spec.Rules[i].Source.IPCollections = expandStringList(source["ipcollections"].([]interface{}))
+		if source, ok := r["source"].([]interface{}); ok && len(source) > 0 {
+			s := source[0].(map[string]interface{})
+			natRule.Source.Addresses = expandStringList(s["addresses"].([]interface{}))
+			natRule.Source.IPCollections = expandStringList(s["ipcollections"].([]interface{}))
+			natRule.Source.Any = len(natRule.Source.Addresses) == 0 && len(natRule.Source.IPCollections) == 0
+		}
 
-		destination := r["destination"].([]interface{})[0].(map[string]interface{})
-		natPolicy.Spec.Rules[i].Destination.Addresses = expandStringList(destination["addresses"].([]interface{}))
-		natPolicy.Spec.Rules[i].Destination.IPCollections = expandStringList(destination["ipcollections"].([]interface{}))
+		if destination, ok := r["destination"].([]interface{}); ok && len(destination) > 0 {
+			d := destination[0].(map[string]interface{})
+			natRule.Destination.Addresses = expandStringList(d["addresses"].([]interface{}))
+			natRule.Destination.IPCollections = expandStringList(d["ipcollections"].([]interface{}))
+			natRule.Destination.Any = len(natRule.Destination.Addresses) == 0 && len(natRule.Destination.IPCollections) == 0
+		}
 
-		destProtoPort := r["destination_proto_port"].([]interface{})[0].(map[string]interface{})
-		natPolicy.Spec.Rules[i].DestinationProtoPort.Protocol = destProtoPort["protocol"].(string)
-		natPolicy.Spec.Rules[i].DestinationProtoPort.Ports = destProtoPort["ports"].(string)
+		if destProtoPort, ok := r["destination_proto_port"].([]interface{}); ok && len(destProtoPort) > 0 {
+			dpp := destProtoPort[0].(map[string]interface{})
+			natRule.DestinationProtoPort = struct {
+				Protocol string `json:"protocol"`
+				Ports    string `json:"ports"`
+			}{
+				Protocol: dpp["protocol"].(string),
+				Ports:    dpp["ports"].(string),
+			}
+		}
 
-		translatedSource := r["translated_source"].([]interface{})[0].(map[string]interface{})
-		natPolicy.Spec.Rules[i].TranslatedSource.Addresses = expandStringList(translatedSource["addresses"].([]interface{}))
-		natPolicy.Spec.Rules[i].TranslatedSource.IPCollections = expandStringList(translatedSource["ipcollections"].([]interface{}))
+		if translatedSource, ok := r["translated_source"].([]interface{}); ok && len(translatedSource) > 0 {
+			ts := translatedSource[0].(map[string]interface{})
+			natRule.TranslatedSource = &struct {
+				Addresses     []string `json:"addresses,omitempty"`
+				IPCollections []string `json:"ipcollections,omitempty"`
+			}{
+				Addresses:     expandStringList(ts["addresses"].([]interface{})),
+				IPCollections: expandStringList(ts["ipcollections"].([]interface{})),
+			}
+		}
 
-		translatedDest := r["translated_destination"].([]interface{})[0].(map[string]interface{})
-		natPolicy.Spec.Rules[i].TranslatedDestination.Addresses = expandStringList(translatedDest["addresses"].([]interface{}))
-		natPolicy.Spec.Rules[i].TranslatedDestination.IPCollections = expandStringList(translatedDest["ipcollections"].([]interface{}))
+		if translatedDest, ok := r["translated_destination"].([]interface{}); ok && len(translatedDest) > 0 {
+			td := translatedDest[0].(map[string]interface{})
+			natRule.TranslatedDestination = &struct {
+				Addresses     []string `json:"addresses,omitempty"`
+				IPCollections []string `json:"ipcollections,omitempty"`
+			}{
+				Addresses:     expandStringList(td["addresses"].([]interface{})),
+				IPCollections: expandStringList(td["ipcollections"].([]interface{})),
+			}
+		}
 
-		natPolicy.Spec.Rules[i].TranslatedDestinationPort = r["translated_destination_port"].(string)
+		if translatedDestPort, ok := r["translated_destination_port"].(string); ok && translatedDestPort != "" {
+			natRule.TranslatedDestinationPort = translatedDestPort
+		}
+
+		natPolicy.Spec.Rules = append(natPolicy.Spec.Rules, natRule)
 	}
 
 	natPolicy.Spec.PolicyDistributionTargets = expandStringList(d.Get("policy_distribution_targets").([]interface{}))
@@ -344,42 +362,60 @@ func resourceNATPolicyRead(ctx context.Context, d *schema.ResourceData, m interf
 		r["name"] = rule.Name
 		r["disable"] = rule.Disable
 		r["type"] = rule.Type
+
 		r["source"] = []interface{}{
 			map[string]interface{}{
 				"addresses":     rule.Source.Addresses,
 				"ipcollections": rule.Source.IPCollections,
 			},
 		}
+
 		r["destination"] = []interface{}{
 			map[string]interface{}{
 				"addresses":     rule.Destination.Addresses,
 				"ipcollections": rule.Destination.IPCollections,
 			},
 		}
+
 		r["destination_proto_port"] = []interface{}{
 			map[string]interface{}{
 				"protocol": rule.DestinationProtoPort.Protocol,
 				"ports":    rule.DestinationProtoPort.Ports,
 			},
 		}
-		r["translated_source"] = []interface{}{
-			map[string]interface{}{
-				"addresses":     rule.TranslatedSource.Addresses,
-				"ipcollections": rule.TranslatedSource.IPCollections,
-			},
+
+		if rule.TranslatedSource != nil {
+			r["translated_source"] = []interface{}{
+				map[string]interface{}{
+					"addresses":     rule.TranslatedSource.Addresses,
+					"ipcollections": rule.TranslatedSource.IPCollections,
+				},
+			}
 		}
-		r["translated_destination"] = []interface{}{
-			map[string]interface{}{
-				"addresses":     rule.TranslatedDestination.Addresses,
-				"ipcollections": rule.TranslatedDestination.IPCollections,
-			},
+
+		if rule.TranslatedDestination != nil {
+			r["translated_destination"] = []interface{}{
+				map[string]interface{}{
+					"addresses":     rule.TranslatedDestination.Addresses,
+					"ipcollections": rule.TranslatedDestination.IPCollections,
+				},
+			}
 		}
-		r["translated_destination_port"] = rule.TranslatedDestinationPort
+
+		if rule.TranslatedDestinationPort != "" {
+			r["translated_destination_port"] = rule.TranslatedDestinationPort
+		}
+
 		rules[i] = r
 	}
-	d.Set("rule", rules)
 
-	d.Set("policy_distribution_targets", natPolicy.Spec.PolicyDistributionTargets)
+	if err := d.Set("rule", rules); err != nil {
+		return diag.FromErr(err)
+	}
+
+	if err := d.Set("policy_distribution_targets", natPolicy.Spec.PolicyDistributionTargets); err != nil {
+		return diag.FromErr(err)
+	}
 
 	return nil
 }
@@ -393,66 +429,78 @@ func resourceNATPolicyUpdate(ctx context.Context, d *schema.ResourceData, m inte
 		APIVersion: "v1",
 	}
 
-	natPolicy.Meta.Tenant = "default"
-	natPolicy.Meta.Namespace = "default"
 	natPolicy.Meta.Name = d.Id()
 	natPolicy.Meta.DisplayName = d.Get("display_name").(string)
+	natPolicy.Meta.Tenant = "default"
+	natPolicy.Meta.Namespace = "default"
 
 	rules := d.Get("rule").([]interface{})
-	natPolicy.Spec.Rules = make([]struct {
-		Name    string `json:"name"`
-		Disable bool   `json:"disable,omitempty"`
-		Type    string `json:"type"`
-		Source  struct {
-			Addresses     []string `json:"addresses,omitempty"`
-			IPCollections []string `json:"ipcollections,omitempty"`
-		} `json:"source"`
-		Destination struct {
-			Addresses     []string `json:"addresses,omitempty"`
-			IPCollections []string `json:"ipcollections,omitempty"`
-		} `json:"destination"`
-		DestinationProtoPort struct {
-			Protocol string `json:"protocol"`
-			Ports    string `json:"ports"`
-		} `json:"destination-proto-port"`
-		TranslatedSource struct {
-			Addresses     []string `json:"addresses,omitempty"`
-			IPCollections []string `json:"ipcollections,omitempty"`
-		} `json:"translated-source"`
-		TranslatedDestination struct {
-			Addresses     []string `json:"addresses,omitempty"`
-			IPCollections []string `json:"ipcollections,omitempty"`
-		} `json:"translated-destination"`
-		TranslatedDestinationPort string `json:"translated-destination-port"`
-	}, len(rules))
+	if err := validateNATRules(rules); err != nil {
+		return diag.FromErr(err)
+	}
 
-	for i, rule := range rules {
+	natPolicy.Spec.Rules = make([]NatRule, 0, len(rules))
+
+	for _, rule := range rules {
 		r := rule.(map[string]interface{})
-		natPolicy.Spec.Rules[i].Name = r["name"].(string)
-		natPolicy.Spec.Rules[i].Disable = r["disable"].(bool)
-		natPolicy.Spec.Rules[i].Type = r["type"].(string)
+		natRule := NatRule{
+			Name:    r["name"].(string),
+			Disable: r["disable"].(bool),
+			Type:    r["type"].(string),
+		}
 
-		source := r["source"].([]interface{})[0].(map[string]interface{})
-		natPolicy.Spec.Rules[i].Source.Addresses = expandStringList(source["addresses"].([]interface{}))
-		natPolicy.Spec.Rules[i].Source.IPCollections = expandStringList(source["ipcollections"].([]interface{}))
+		if source, ok := r["source"].([]interface{}); ok && len(source) > 0 {
+			s := source[0].(map[string]interface{})
+			natRule.Source.Addresses = expandStringList(s["addresses"].([]interface{}))
+			natRule.Source.IPCollections = expandStringList(s["ipcollections"].([]interface{}))
+			natRule.Source.Any = len(natRule.Source.Addresses) == 0 && len(natRule.Source.IPCollections) == 0
+		}
 
-		destination := r["destination"].([]interface{})[0].(map[string]interface{})
-		natPolicy.Spec.Rules[i].Destination.Addresses = expandStringList(destination["addresses"].([]interface{}))
-		natPolicy.Spec.Rules[i].Destination.IPCollections = expandStringList(destination["ipcollections"].([]interface{}))
+		if destination, ok := r["destination"].([]interface{}); ok && len(destination) > 0 {
+			d := destination[0].(map[string]interface{})
+			natRule.Destination.Addresses = expandStringList(d["addresses"].([]interface{}))
+			natRule.Destination.IPCollections = expandStringList(d["ipcollections"].([]interface{}))
+			natRule.Destination.Any = len(natRule.Destination.Addresses) == 0 && len(natRule.Destination.IPCollections) == 0
+		}
 
-		destProtoPort := r["destination_proto_port"].([]interface{})[0].(map[string]interface{})
-		natPolicy.Spec.Rules[i].DestinationProtoPort.Protocol = destProtoPort["protocol"].(string)
-		natPolicy.Spec.Rules[i].DestinationProtoPort.Ports = destProtoPort["ports"].(string)
+		if destProtoPort, ok := r["destination_proto_port"].([]interface{}); ok && len(destProtoPort) > 0 {
+			dpp := destProtoPort[0].(map[string]interface{})
+			natRule.DestinationProtoPort = struct {
+				Protocol string `json:"protocol"`
+				Ports    string `json:"ports"`
+			}{
+				Protocol: dpp["protocol"].(string),
+				Ports:    dpp["ports"].(string),
+			}
+		}
 
-		translatedSource := r["translated_source"].([]interface{})[0].(map[string]interface{})
-		natPolicy.Spec.Rules[i].TranslatedSource.Addresses = expandStringList(translatedSource["addresses"].([]interface{}))
-		natPolicy.Spec.Rules[i].TranslatedSource.IPCollections = expandStringList(translatedSource["ipcollections"].([]interface{}))
+		if translatedSource, ok := r["translated_source"].([]interface{}); ok && len(translatedSource) > 0 {
+			ts := translatedSource[0].(map[string]interface{})
+			natRule.TranslatedSource = &struct {
+				Addresses     []string `json:"addresses,omitempty"`
+				IPCollections []string `json:"ipcollections,omitempty"`
+			}{
+				Addresses:     expandStringList(ts["addresses"].([]interface{})),
+				IPCollections: expandStringList(ts["ipcollections"].([]interface{})),
+			}
+		}
 
-		translatedDest := r["translated_destination"].([]interface{})[0].(map[string]interface{})
-		natPolicy.Spec.Rules[i].TranslatedDestination.Addresses = expandStringList(translatedDest["addresses"].([]interface{}))
-		natPolicy.Spec.Rules[i].TranslatedDestination.IPCollections = expandStringList(translatedDest["ipcollections"].([]interface{}))
+		if translatedDest, ok := r["translated_destination"].([]interface{}); ok && len(translatedDest) > 0 {
+			td := translatedDest[0].(map[string]interface{})
+			natRule.TranslatedDestination = &struct {
+				Addresses     []string `json:"addresses,omitempty"`
+				IPCollections []string `json:"ipcollections,omitempty"`
+			}{
+				Addresses:     expandStringList(td["addresses"].([]interface{})),
+				IPCollections: expandStringList(td["ipcollections"].([]interface{})),
+			}
+		}
 
-		natPolicy.Spec.Rules[i].TranslatedDestinationPort = r["translated_destination_port"].(string)
+		if translatedDestPort, ok := r["translated_destination_port"].(string); ok {
+			natRule.TranslatedDestinationPort = translatedDestPort
+		}
+
+		natPolicy.Spec.Rules = append(natPolicy.Spec.Rules, natRule)
 	}
 
 	natPolicy.Spec.PolicyDistributionTargets = expandStringList(d.Get("policy_distribution_targets").([]interface{}))

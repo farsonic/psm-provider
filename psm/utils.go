@@ -236,3 +236,101 @@ func flattenSpec(spec *TunnelSpec, d *schema.ResourceData) []interface{} {
 
 	return []interface{}{m}
 }
+
+func validateNATRules(rules []interface{}) error {
+	for i, r := range rules {
+		rule, ok := r.(map[string]interface{})
+		if !ok {
+			return fmt.Errorf("invalid rule type at index %d", i)
+		}
+
+		// Validate name
+		name, ok := rule["name"].(string)
+		if !ok || name == "" {
+			return fmt.Errorf("rule %d: name is required", i)
+		}
+
+		// Validate type
+		ruleType, ok := rule["type"].(string)
+		if !ok || ruleType == "" {
+			return fmt.Errorf("rule %d: type is required", i)
+		}
+
+		// Validate source
+		source, ok := rule["source"].([]interface{})
+		if !ok || len(source) == 0 {
+			return fmt.Errorf("rule %d: source is required", i)
+		}
+		sourceMap := source[0].(map[string]interface{})
+		sourceAddresses := sourceMap["addresses"].([]interface{})
+		sourceIPCollections := sourceMap["ipcollections"].([]interface{})
+		if len(sourceAddresses) == 0 && len(sourceIPCollections) == 0 {
+			return fmt.Errorf("rule %d: source must have either addresses or ipcollections", i)
+		}
+
+		// Validate destination
+		destination, ok := rule["destination"].([]interface{})
+		if !ok || len(destination) == 0 {
+			return fmt.Errorf("rule %d: destination is required", i)
+		}
+		destMap := destination[0].(map[string]interface{})
+		destAddresses := destMap["addresses"].([]interface{})
+		destIPCollections := destMap["ipcollections"].([]interface{})
+		if len(destAddresses) == 0 && len(destIPCollections) == 0 {
+			return fmt.Errorf("rule %d: destination must have either addresses or ipcollections", i)
+		}
+
+		// Validate destination_proto_port
+		destProtoPort, ok := rule["destination_proto_port"].([]interface{})
+		if !ok || len(destProtoPort) == 0 {
+			return fmt.Errorf("rule %d: destination_proto_port is required", i)
+		}
+		dpp := destProtoPort[0].(map[string]interface{})
+		protocol, ok := dpp["protocol"].(string)
+		if !ok || protocol == "" {
+			return fmt.Errorf("rule %d: protocol in destination_proto_port is required", i)
+		}
+		ports, ok := dpp["ports"].(string)
+		if !ok || ports == "" {
+			return fmt.Errorf("rule %d: ports in destination_proto_port is required", i)
+		}
+
+		// Validate translated_source and translated_destination
+		translatedSource, hasTranslatedSource := rule["translated_source"].([]interface{})
+		translatedDest, hasTranslatedDest := rule["translated_destination"].([]interface{})
+
+		if !hasTranslatedSource && !hasTranslatedDest {
+			return fmt.Errorf("rule %d: either translated_source or translated_destination must be specified", i)
+		}
+
+		if hasTranslatedSource && len(translatedSource) > 0 {
+			ts := translatedSource[0].(map[string]interface{})
+			tsAddresses := ts["addresses"].([]interface{})
+			tsIPCollections := ts["ipcollections"].([]interface{})
+			if len(tsAddresses) == 0 && len(tsIPCollections) == 0 {
+				return fmt.Errorf("rule %d: translated_source must have either addresses or ipcollections", i)
+			}
+		}
+
+		if hasTranslatedDest && len(translatedDest) > 0 {
+			td := translatedDest[0].(map[string]interface{})
+			tdAddresses := td["addresses"].([]interface{})
+			tdIPCollections := td["ipcollections"].([]interface{})
+			if len(tdAddresses) == 0 && len(tdIPCollections) == 0 {
+				return fmt.Errorf("rule %d: translated_destination must have either addresses or ipcollections", i)
+			}
+		}
+
+		// Validate translated_destination_port
+		translatedDestPort, hasTranslatedDestPort := rule["translated_destination_port"].(string)
+		if hasTranslatedDestPort && translatedDestPort != "" {
+			if protocol == "any" {
+				return fmt.Errorf("rule %d: protocol cannot be 'any' when translated_destination_port is set", i)
+			}
+			if !hasTranslatedDest {
+				return fmt.Errorf("rule %d: translated_destination is required when translated_destination_port is specified", i)
+			}
+		}
+	}
+	return nil
+}
