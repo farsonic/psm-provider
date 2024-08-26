@@ -5,7 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"log"
 	"net/http"
 
@@ -133,7 +133,7 @@ func resourceFlowExportPolicyCreate(ctx context.Context, d *schema.ResourceData,
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		bodyBytes, _ := ioutil.ReadAll(resp.Body)
+		bodyBytes, _ := io.ReadAll(resp.Body)
 		errMsg := fmt.Sprintf("failed to create IPFIX: HTTP %d %s: %s", resp.StatusCode, resp.Status, bodyBytes)
 		return diag.Diagnostics{
 			{
@@ -249,7 +249,7 @@ func resourceFlowExportPolicyUpdate(ctx context.Context, d *schema.ResourceData,
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		bodyBytes, _ := ioutil.ReadAll(resp.Body)
+		bodyBytes, _ := io.ReadAll(resp.Body)
 		errMsg := fmt.Sprintf("failed to update IPFIX: HTTP %d %s: %s", resp.StatusCode, resp.Status, bodyBytes)
 		return diag.Diagnostics{
 			{

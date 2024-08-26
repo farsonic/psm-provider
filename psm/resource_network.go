@@ -5,7 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -158,7 +158,7 @@ func resourceNetworkCreate(ctx context.Context, d *schema.ResourceData, m interf
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		bodyBytes, _ := ioutil.ReadAll(resp.Body)
+		bodyBytes, _ := io.ReadAll(resp.Body)
 		errMsg := fmt.Sprintf("failed to create network: HTTP %d %s: %s", resp.StatusCode, resp.Status, bodyBytes)
 		// Added for additional debug if the JSON we send to the PSM server is invalid.
 		return diag.Diagnostics{
@@ -326,7 +326,7 @@ func resourceNetworkUpdate(ctx context.Context, d *schema.ResourceData, m interf
 	defer respUpdate.Body.Close()
 
 	if respUpdate.StatusCode != http.StatusOK {
-		bodyBytes, _ := ioutil.ReadAll(respUpdate.Body)
+		bodyBytes, _ := io.ReadAll(respUpdate.Body)
 		errMsg := fmt.Sprintf("failed to update network: HTTP %d %s: %s", respUpdate.StatusCode, respUpdate.Status, bodyBytes)
 		if isDebugEnabled() {
 			log.Printf("[DEBUG] Network update failed with response: %s", bodyBytes)

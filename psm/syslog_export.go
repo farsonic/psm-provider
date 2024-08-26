@@ -5,7 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"log"
 	"net/http"
 
@@ -182,7 +182,7 @@ func resourceSyslogPolicyCreate(ctx context.Context, d *schema.ResourceData, m i
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		bodyBytes, _ := ioutil.ReadAll(resp.Body)
+		bodyBytes, _ := io.ReadAll(resp.Body)
 		errMsg := fmt.Sprintf("failed to create Syslog Policy: HTTP %d %s: %s", resp.StatusCode, resp.Status, bodyBytes)
 		return diag.Diagnostics{
 			{
@@ -229,7 +229,7 @@ func resourceSyslogPolicyRead(ctx context.Context, d *schema.ResourceData, m int
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		bodyBytes, _ := ioutil.ReadAll(resp.Body)
+		bodyBytes, _ := io.ReadAll(resp.Body)
 		errMsg := fmt.Sprintf("failed to read Syslog Policy: HTTP %d %s: %s", resp.StatusCode, resp.Status, bodyBytes)
 		return diag.Diagnostics{
 			{
@@ -333,7 +333,7 @@ func resourceSyslogPolicyUpdate(ctx context.Context, d *schema.ResourceData, m i
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		bodyBytes, _ := ioutil.ReadAll(resp.Body)
+		bodyBytes, _ := io.ReadAll(resp.Body)
 		errMsg := fmt.Sprintf("failed to update Syslog Policy: HTTP %d %s: %s", resp.StatusCode, resp.Status, bodyBytes)
 		return diag.Diagnostics{
 			{
@@ -376,7 +376,7 @@ func resourceSyslogPolicyDelete(ctx context.Context, d *schema.ResourceData, m i
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		bodyBytes, _ := ioutil.ReadAll(resp.Body)
+		bodyBytes, _ := io.ReadAll(resp.Body)
 		errMsg := fmt.Sprintf("failed to delete Syslog Policy: HTTP %d %s: %s", resp.StatusCode, resp.Status, bodyBytes)
 		return diag.Diagnostics{
 			{
@@ -415,7 +415,7 @@ func resourceSyslogPolicyImport(ctx context.Context, d *schema.ResourceData, m i
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		bodyBytes, _ := ioutil.ReadAll(resp.Body)
+		bodyBytes, _ := io.ReadAll(resp.Body)
 		return nil, fmt.Errorf("failed to read Syslog Policy: HTTP %d %s: %s", resp.StatusCode, resp.Status, bodyBytes)
 	}
 
