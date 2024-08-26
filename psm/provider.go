@@ -35,6 +35,7 @@ func Provider() *schema.Provider {
 			"psm_ipsec_policy":         resourceIPSecPolicy(),
 			"psm_certificate":          resourceCertificate(),
 			"psm_nat_policy":           resourceNATPolicy(),
+			"psm_user_preferences":     resourcePSMUserPreferences(),
 		},
 		Schema: map[string]*schema.Schema{
 			"user": {
