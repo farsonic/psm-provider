@@ -5,7 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
@@ -106,7 +106,7 @@ func resourceWorkloadCreate(ctx context.Context, d *schema.ResourceData, m inter
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		bodyBytes, _ := ioutil.ReadAll(resp.Body)
+		bodyBytes, _ := io.ReadAll(resp.Body)
 		errMsg := fmt.Sprintf("failed to create workload: HTTP %d %s: %s", resp.StatusCode, resp.Status, bodyBytes)
 		return diag.Diagnostics{
 			{

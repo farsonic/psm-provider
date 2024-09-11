@@ -5,7 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"log"
 	"net/http"
 
@@ -160,7 +160,7 @@ func resourceWorkloadGroupCreate(ctx context.Context, d *schema.ResourceData, m 
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		bodyBytes, _ := ioutil.ReadAll(resp.Body)
+		bodyBytes, _ := io.ReadAll(resp.Body)
 		errMsg := fmt.Sprintf("failed to create workload: HTTP %d %s: %s", resp.StatusCode, resp.Status, bodyBytes)
 		return diag.Diagnostics{
 			{
@@ -273,7 +273,7 @@ func resourceWorkloadGroupUpdate(ctx context.Context, d *schema.ResourceData, m 
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		bodyBytes, _ := ioutil.ReadAll(resp.Body)
+		bodyBytes, _ := io.ReadAll(resp.Body)
 		errMsg := fmt.Sprintf("failed to update workload: HTTP %d %s: %s", resp.StatusCode, resp.Status, bodyBytes)
 		return diag.Diagnostics{
 			{
