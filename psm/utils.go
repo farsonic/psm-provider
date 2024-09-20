@@ -88,32 +88,49 @@ func expandSpec(d *schema.ResourceData) TunnelSpec {
 		DisableTCPMSSAdjust:       getBoolOrDefault(tunnelData, "disable_tcp_mss_adjust", false),
 	}
 
-	if lifetime, ok := tunnelData["lifetime"].([]interface{}); ok && len(lifetime) > 0 {
-		lifetimeData := lifetime[0].(map[string]interface{})
-		spec.Config = &TunnelConfig{
-			SALifetime:  getStringOrEmpty(lifetimeData, "sa_lifetime"),
-			IKELifetime: getStringOrEmpty(lifetimeData, "ike_lifetime"),
-		}
-	}
-
 	return spec
 }
 
 func expandTunnelEndpoints(endpoints []interface{}) []TunnelEndpoint {
-	result := make([]TunnelEndpoint, len(endpoints))
-	for i, endpoint := range endpoints {
+	var tunnelEndpoints []TunnelEndpoint
+
+	for _, endpoint := range endpoints {
 		endpointData := endpoint.(map[string]interface{})
-		result[i] = TunnelEndpoint{
-			InterfaceName:    getStringOrEmpty(endpointData, "interface_name"),
-			DSE:              getStringOrEmpty(endpointData, "dse"),
-			IKEVersion:       getStringOrEmpty(endpointData, "ike_version"),
-			IKESA:            expandIKESA(endpointData["ike_sa"].([]interface{})[0].(map[string]interface{})),
-			IPSECSA:          expandIPSECSA(endpointData["ipsec_sa"].([]interface{})[0].(map[string]interface{})),
-			LocalIdentifier:  expandIdentifier(endpointData["local_identifier"].([]interface{})[0].(map[string]interface{})),
-			RemoteIdentifier: expandIdentifier(endpointData["remote_identifier"].([]interface{})[0].(map[string]interface{})),
+		tunnelEndpoint := TunnelEndpoint{
+			InterfaceName: getStringOrEmpty(endpointData, "interface_name"),
+			DSE:           getStringOrEmpty(endpointData, "dse"),
+			IKEVersion:    getStringOrEmpty(endpointData, "ike_version"),
 		}
+
+		if ikeSA, ok := endpointData["ike_sa"].([]interface{}); ok && len(ikeSA) > 0 {
+			tunnelEndpoint.IKESA = expandIKESA(ikeSA[0].(map[string]interface{}))
+		}
+
+		if ipsecSA, ok := endpointData["ipsec_sa"].([]interface{}); ok && len(ipsecSA) > 0 {
+			tunnelEndpoint.IPSECSA = expandIPSECSA(ipsecSA[0].(map[string]interface{}))
+		}
+
+		if localID, ok := endpointData["local_identifier"].([]interface{}); ok && len(localID) > 0 {
+			tunnelEndpoint.LocalIdentifier = expandIdentifier(localID[0].(map[string]interface{}))
+		}
+
+		if remoteID, ok := endpointData["remote_identifier"].([]interface{}); ok && len(remoteID) > 0 {
+			tunnelEndpoint.RemoteIdentifier = expandIdentifier(remoteID[0].(map[string]interface{}))
+		}
+
+		// Expand lifetime for this endpoint
+		if lifetime, ok := endpointData["lifetime"].([]interface{}); ok && len(lifetime) > 0 {
+			lifetimeData := lifetime[0].(map[string]interface{})
+			tunnelEndpoint.Lifetime = &Lifetime{
+				SALifetime:  getStringOrEmpty(lifetimeData, "sa_lifetime"),
+				IKELifetime: getStringOrEmpty(lifetimeData, "ike_lifetime"),
+			}
+		}
+
+		tunnelEndpoints = append(tunnelEndpoints, tunnelEndpoint)
 	}
-	return result
+
+	return tunnelEndpoints
 }
 
 func expandIKESA(data map[string]interface{}) *IKESA {
@@ -162,20 +179,67 @@ func stringPtr(s string) *string {
 	return &s
 }
 
-func flattenSpec(spec *TunnelSpec, d *schema.ResourceData) []interface{} {
-	m := make(map[string]interface{})
-
-	m["ha_mode"] = spec.HAMode
-	m["policy_distribution_targets"] = spec.PolicyDistributionTargets
-	m["disable_tcp_mss_adjust"] = spec.DisableTCPMSSAdjust
-
-	// Only include lifetime if it exists in the current state
-	if v, ok := d.GetOk("tunnel.0.lifetime"); ok {
-		m["lifetime"] = v.([]interface{})
+func flattenSpec(spec *TunnelSpec, d *schema.ResourceData) error {
+	if spec == nil {
+		return fmt.Errorf("TunnelSpec is nil")
 	}
 
-	tunnelEndpoints := make([]interface{}, len(spec.TunnelEndpoints))
-	for i, endpoint := range spec.TunnelEndpoints {
+	tunnelMap := make(map[string]interface{})
+	tunnelMap["ha_mode"] = spec.HAMode
+	tunnelMap["policy_distribution_targets"] = spec.PolicyDistributionTargets
+	tunnelMap["disable_tcp_mss_adjust"] = spec.DisableTCPMSSAdjust
+
+	tunnelEndpoints := flattenTunnelEndpoints(spec.TunnelEndpoints, d)
+	tunnelMap["tunnel_endpoints"] = tunnelEndpoints
+
+	if spec.Config != nil {
+		lifetime := make(map[string]interface{})
+
+		// Preserve existing values if new values are empty
+		oldTunnel, ok := d.GetOk("tunnel")
+		if ok && len(oldTunnel.([]interface{})) > 0 {
+			oldTunnelMap := oldTunnel.([]interface{})[0].(map[string]interface{})
+			if oldLifetime, ok := oldTunnelMap["lifetime"].([]interface{}); ok && len(oldLifetime) > 0 {
+				oldLifetimeMap := oldLifetime[0].(map[string]interface{})
+
+				if spec.Config.SALifetime != "" {
+					lifetime["sa_lifetime"] = spec.Config.SALifetime
+				} else if saLifetime, ok := oldLifetimeMap["sa_lifetime"]; ok {
+					lifetime["sa_lifetime"] = saLifetime
+				}
+
+				if spec.Config.IKELifetime != "" {
+					lifetime["ike_lifetime"] = spec.Config.IKELifetime
+				} else if ikeLifetime, ok := oldLifetimeMap["ike_lifetime"]; ok {
+					lifetime["ike_lifetime"] = ikeLifetime
+				}
+			}
+		} else {
+			// If there are no old values, only set the new values if they're not empty
+			if spec.Config.SALifetime != "" {
+				lifetime["sa_lifetime"] = spec.Config.SALifetime
+			}
+			if spec.Config.IKELifetime != "" {
+				lifetime["ike_lifetime"] = spec.Config.IKELifetime
+			}
+		}
+
+		// Only add the lifetime block if it's not empty
+		if len(lifetime) > 0 {
+			tunnelMap["lifetime"] = []interface{}{lifetime}
+		}
+	}
+
+	if err := d.Set("tunnel", []interface{}{tunnelMap}); err != nil {
+		return fmt.Errorf("error setting tunnel: %s", err)
+	}
+
+	return nil
+}
+
+func flattenTunnelEndpoints(endpoints []TunnelEndpoint, d *schema.ResourceData) []interface{} {
+	tunnelEndpoints := make([]interface{}, len(endpoints))
+	for i, endpoint := range endpoints {
 		endpointMap := make(map[string]interface{})
 		endpointMap["interface_name"] = endpoint.InterfaceName
 		endpointMap["dse"] = endpoint.DSE
@@ -229,12 +293,30 @@ func flattenSpec(spec *TunnelSpec, d *schema.ResourceData) []interface{} {
 			},
 		}
 
+		// Add lifetime configuration if it exists
+		if endpoint.Lifetime != nil {
+			endpointMap["lifetime"] = []interface{}{
+				map[string]interface{}{
+					"sa_lifetime":  endpoint.Lifetime.SALifetime,
+					"ike_lifetime": endpoint.Lifetime.IKELifetime,
+				},
+			}
+		} else {
+			// Check if lifetime exists in the current state and preserve it
+			if v, ok := d.GetOk(fmt.Sprintf("tunnel.0.tunnel_endpoints.%d.lifetime", i)); ok {
+				endpointMap["lifetime"] = v.([]interface{})
+			}
+		}
+
 		tunnelEndpoints[i] = endpointMap
 	}
 
-	m["tunnel_endpoints"] = tunnelEndpoints
+	return tunnelEndpoints
+}
 
-	return []interface{}{m}
+func suppressMissingLifetimeValues(k, old, new string, d *schema.ResourceData) bool {
+	// If the new value is empty, suppress the diff
+	return new == ""
 }
 
 func validateNATRules(rules []interface{}) error {

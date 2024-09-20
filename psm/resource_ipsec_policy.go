@@ -40,20 +40,18 @@ func resourceIPSecPolicy() *schema.Resource {
 				Required: true,
 				Elem: &schema.Resource{
 					Schema: map[string]*schema.Schema{
+						"ha_mode": {
+							Type:     schema.TypeString,
+							Required: true,
+						},
 						"policy_distribution_targets": {
 							Type:     schema.TypeList,
 							Required: true,
 							Elem:     &schema.Schema{Type: schema.TypeString},
 						},
-						"ha_mode": {
-							Type:     schema.TypeString,
-							Optional: true,
-							Default:  "no_ha",
-						},
 						"disable_tcp_mss_adjust": {
 							Type:     schema.TypeBool,
 							Optional: true,
-							Default:  false,
 						},
 						"tunnel_endpoints": {
 							Type:     schema.TypeList,
@@ -95,8 +93,7 @@ func resourceIPSecPolicy() *schema.Resource {
 												},
 												"rekey_lifetime": {
 													Type:     schema.TypeString,
-													Optional: true,
-													Default:  "8h",
+													Required: true,
 												},
 												"pre_shared_key": {
 													Type:      schema.TypeString,
@@ -105,28 +102,23 @@ func resourceIPSecPolicy() *schema.Resource {
 												},
 												"reauth_lifetime": {
 													Type:     schema.TypeString,
-													Optional: true,
-													Default:  "24h",
+													Required: true,
 												},
 												"dpd_delay": {
 													Type:     schema.TypeString,
-													Optional: true,
-													Default:  "60s",
+													Required: true,
 												},
 												"ikev1_dpd_timeout": {
 													Type:     schema.TypeString,
-													Optional: true,
-													Default:  "180s",
+													Required: true,
 												},
 												"ike_initiator": {
 													Type:     schema.TypeBool,
-													Optional: true,
-													Default:  true,
+													Required: true,
 												},
 												"auth_type": {
 													Type:     schema.TypeString,
-													Optional: true,
-													Default:  "psk",
+													Required: true,
 												},
 												"local_identity_certificates": {
 													Type:     schema.TypeString,
@@ -158,8 +150,7 @@ func resourceIPSecPolicy() *schema.Resource {
 												},
 												"rekey_lifetime": {
 													Type:     schema.TypeString,
-													Optional: true,
-													Default:  "1h",
+													Required: true,
 												},
 											},
 										},
@@ -198,22 +189,27 @@ func resourceIPSecPolicy() *schema.Resource {
 											},
 										},
 									},
-								},
-							},
-						},
-						"lifetime": {
-							Type:     schema.TypeList,
-							MaxItems: 1,
-							Optional: true,
-							Elem: &schema.Resource{
-								Schema: map[string]*schema.Schema{
-									"sa_lifetime": {
-										Type:     schema.TypeString,
+									"lifetime": {
+										Type:     schema.TypeList,
+										MaxItems: 1,
 										Optional: true,
-									},
-									"ike_lifetime": {
-										Type:     schema.TypeString,
-										Optional: true,
+										Computed: true,
+										Elem: &schema.Resource{
+											Schema: map[string]*schema.Schema{
+												"sa_lifetime": {
+													Type:             schema.TypeString,
+													Optional:         true,
+													Computed:         true,
+													DiffSuppressFunc: suppressMissingLifetimeValues,
+												},
+												"ike_lifetime": {
+													Type:             schema.TypeString,
+													Optional:         true,
+													Computed:         true,
+													DiffSuppressFunc: suppressMissingLifetimeValues,
+												},
+											},
+										},
 									},
 								},
 							},
@@ -265,6 +261,12 @@ type TunnelEndpoint struct {
 	IPSECSA          *IPSECSA   `json:"ipsec-sa,omitempty"`
 	LocalIdentifier  Identifier `json:"local-identifier"`
 	RemoteIdentifier Identifier `json:"remote-identifier"`
+	Lifetime         *Lifetime  `json:"lifetime,omitempty"`
+}
+
+type Lifetime struct {
+	SALifetime  string `json:"sa-lifetime,omitempty"`
+	IKELifetime string `json:"ike-lifetime,omitempty"`
 }
 
 type IKESA struct {
@@ -336,22 +338,32 @@ func resourceIPSecPolicyCreate(ctx context.Context, d *schema.ResourceData, m in
 	}
 
 	// Decode the response
-	var updatedTunnel Tunnel
-	if err := json.NewDecoder(resp.Body).Decode(&updatedTunnel); err != nil {
+	var createdTunnel Tunnel
+	if err := json.NewDecoder(resp.Body).Decode(&createdTunnel); err != nil {
 		return diag.FromErr(fmt.Errorf("error decoding response: %v", err))
 	}
 
+	// Set the resource ID
+	if createdTunnel.Meta.UUID != nil {
+		d.SetId(*createdTunnel.Meta.UUID)
+	} else {
+		return diag.FromErr(fmt.Errorf("created tunnel UUID is nil"))
+	}
+
 	// Update the Terraform state with the returned data
-	if err := d.Set("kind", *updatedTunnel.Kind); err != nil {
+	if err := d.Set("kind", *createdTunnel.Kind); err != nil {
 		return diag.FromErr(err)
 	}
-	if err := d.Set("api_version", *updatedTunnel.APIVersion); err != nil {
+	if err := d.Set("api_version", *createdTunnel.APIVersion); err != nil {
 		return diag.FromErr(err)
 	}
-	if err := d.Set("display_name", updatedTunnel.Meta.DisplayName); err != nil {
+	if err := d.Set("display_name", createdTunnel.Meta.DisplayName); err != nil {
 		return diag.FromErr(err)
 	}
-	if err := d.Set("tunnel", flattenSpec(&updatedTunnel.Spec, d)); err != nil {
+
+	// Use the same flatten function as in Read
+	flattenedSpec := flattenSpec(&createdTunnel.Spec, d)
+	if err := d.Set("tunnel", flattenedSpec); err != nil {
 		return diag.FromErr(err)
 	}
 
@@ -399,10 +411,8 @@ func resourceIPSecPolicyRead(ctx context.Context, d *schema.ResourceData, m inte
 		return diag.FromErr(fmt.Errorf("error setting display_name: %v", err))
 	}
 
-	flattenedSpec := flattenSpec(&tunnel.Spec, d)
-
-	if err := d.Set("tunnel", flattenedSpec); err != nil {
-		return diag.FromErr(fmt.Errorf("error setting tunnel: %v", err))
+	if err := flattenSpec(&tunnel.Spec, d); err != nil {
+		return diag.FromErr(fmt.Errorf("error flattening IPSec Policy: %v", err))
 	}
 
 	return nil
