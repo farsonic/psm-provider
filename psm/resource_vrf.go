@@ -17,8 +17,11 @@ func resourceVRF() *schema.Resource {
 	return &schema.Resource{
 		CreateContext: resourceVRFCreate,
 		ReadContext:   resourceVRFRead,
-		DeleteContext: resourceVRFDelete,
 		UpdateContext: resourceVRFUpdate,
+		DeleteContext: resourceVRFDelete,
+		Importer: &schema.ResourceImporter{
+			StateContext: resourceVRFImport,
+		},
 		Schema: map[string]*schema.Schema{
 			"name": {
 				Type:     schema.TypeString,
@@ -26,25 +29,54 @@ func resourceVRF() *schema.Resource {
 				ForceNew: true,
 			},
 			"ingress_security_policy": {
-				Type:     schema.TypeString,
+				Type:     schema.TypeList,
 				Optional: true,
-				ForceNew: false,
+				Elem:     &schema.Schema{Type: schema.TypeString},
 			},
 			"egress_security_policy": {
-				Type:     schema.TypeString,
+				Type:     schema.TypeList,
 				Optional: true,
-				ForceNew: false,
+				Elem:     &schema.Schema{Type: schema.TypeString},
 			},
 			"connection_tracking_mode": {
 				Type:     schema.TypeString,
 				Optional: true,
-				ForceNew: false,
 			},
 			"allow_session_reuse": {
 				Type:     schema.TypeString,
 				Optional: true,
-				ForceNew: false,
 			},
+			"ingress_nat_policy": {
+				Type:     schema.TypeList,
+				Optional: true,
+				Elem:     &schema.Schema{Type: schema.TypeString},
+			},
+			"egress_nat_policy": {
+				Type:     schema.TypeList,
+				Optional: true,
+				Elem:     &schema.Schema{Type: schema.TypeString},
+			},
+			"ipsec_policy": {
+				Type:     schema.TypeList,
+				Optional: true,
+				Elem:     &schema.Schema{Type: schema.TypeString},
+			},
+			"flow_export_policy": {
+				Type:     schema.TypeList,
+				Optional: true,
+				Elem:     &schema.Schema{Type: schema.TypeString},
+			},
+			"maximum_cps_per_network": {
+				Type:     schema.TypeInt,
+				Optional: true,
+				Default:  0,
+			},
+			"maximum_sessions_per_network": {
+				Type:     schema.TypeInt,
+				Optional: true,
+				Default:  0,
+			},
+
 		},
 	}
 }
@@ -68,14 +100,14 @@ type VRF struct {
 		RouterMacAddress                                      interface{}   `json:"router-mac-address"`
 		VxlanVni                                              interface{}   `json:"vxlan-vni"`
 		DefaultIpamPolicy                                     interface{}   `json:"default-ipam-policy"`
-		IngressSecurityPolicy                                 []interface{} `json:"ingress-security-policy"`
-		EgressSecurityPolicy                                  []interface{} `json:"egress-security-policy"`
+        IngressSecurityPolicy []string `json:"ingress-security-policy"`
+        EgressSecurityPolicy  []string `json:"egress-security-policy"`
 		MaximumCpsPerNetworkPerDistributedServicesEntity      int           `json:"maximum-cps-per-network-per-distributed-services-entity"`
 		MaximumSessionsPerNetworkPerDistributedServicesEntity int           `json:"maximum-sessions-per-network-per-distributed-services-entity"`
-		FlowExportPolicy                                      []interface{} `json:"flow-export-policy"`
-		IngressNatPolicy                                      []interface{} `json:"ingress-nat-policy"`
-		EgressNatPolicy                                       []interface{} `json:"egress-nat-policy"`
-		IpsecPolicy                                           []interface{} `json:"ipsec-policy"`
+        FlowExportPolicy      []string `json:"flow-export-policy"`
+        IngressNatPolicy      []string `json:"ingress-nat-policy"`
+        EgressNatPolicy       []string `json:"egress-nat-policy"`
+        IpsecPolicy           []string `json:"ipsec-policy"`
 		SelectCPS                                             int           `json:"selectCPS"`
 		SelectSessions                                        int           `json:"selectSessions"`
 		ConnectionTracking                                    string        `json:"connection-tracking-mode"`
@@ -94,12 +126,28 @@ func resourceVRFCreate(ctx context.Context, d *schema.ResourceData, m interface{
 	vrf.Spec.ConnectionTracking = d.Get("connection_tracking_mode").(string)
 	vrf.Spec.AllowSessionReuse = d.Get("allow_session_reuse").(string)
 	vrfName := d.Get("name").(string)
-	if v, ok := d.GetOk("ingress_security_policy"); ok {
-		vrf.Spec.IngressSecurityPolicy = []interface{}{v.(string)}
-	}
-	if v, ok := d.GetOk("egress_security_policy"); ok {
-		vrf.Spec.EgressSecurityPolicy = []interface{}{v.(string)}
-	}
+	vrf.Spec.MaximumCpsPerNetworkPerDistributedServicesEntity = d.Get("maximum_cps_per_network").(int)
+	vrf.Spec.MaximumSessionsPerNetworkPerDistributedServicesEntity = d.Get("maximum_sessions_per_network").(int)
+
+    if v, ok := d.GetOk("ingress_security_policy"); ok {
+        vrf.Spec.IngressSecurityPolicy = expandStringList(v.([]interface{}))
+    }
+    if v, ok := d.GetOk("egress_security_policy"); ok {
+        vrf.Spec.EgressSecurityPolicy = expandStringList(v.([]interface{}))
+    }
+    if v, ok := d.GetOk("ingress_nat_policy"); ok {
+        vrf.Spec.IngressNatPolicy = expandStringList(v.([]interface{}))
+    }
+    if v, ok := d.GetOk("egress_nat_policy"); ok {
+        vrf.Spec.EgressNatPolicy = expandStringList(v.([]interface{}))
+    }
+    if v, ok := d.GetOk("ipsec_policy"); ok {
+        vrf.Spec.IpsecPolicy = expandStringList(v.([]interface{}))
+    }
+    if v, ok := d.GetOk("flow_export_policy"); ok {
+        vrf.Spec.FlowExportPolicy = expandStringList(v.([]interface{}))
+    }
+
 	if vrfName == "default" {
 		d.SetId("default")
 		return nil
@@ -181,10 +229,19 @@ func resourceVRFRead(ctx context.Context, d *schema.ResourceData, m interface{})
 		return diag.FromErr(err)
 	}
 
-	// Set the properties from the response, need to confirm what we need to add or apply here....
 	d.Set("name", vrf.Meta.Name)
 	d.Set("kind", vrf.Kind)
 	d.Set("api_version", vrf.APIVersion)
+    d.Set("ingress_security_policy", vrf.Spec.IngressSecurityPolicy)
+    d.Set("egress_security_policy", vrf.Spec.EgressSecurityPolicy)
+	d.Set("connection_tracking_mode", vrf.Spec.ConnectionTracking)
+	d.Set("allow_session_reuse", vrf.Spec.AllowSessionReuse)
+    d.Set("ingress_nat_policy", vrf.Spec.IngressNatPolicy)
+    d.Set("egress_nat_policy", vrf.Spec.EgressNatPolicy)
+    d.Set("ipsec_policy", vrf.Spec.IpsecPolicy)
+    d.Set("flow_export_policy", vrf.Spec.FlowExportPolicy)
+	d.Set("maximum_cps_per_network", vrf.Spec.MaximumCpsPerNetworkPerDistributedServicesEntity)
+	d.Set("maximum_sessions_per_network", vrf.Spec.MaximumSessionsPerNetworkPerDistributedServicesEntity)
 
 	return nil
 }
@@ -237,12 +294,28 @@ func resourceVRFUpdate(ctx context.Context, d *schema.ResourceData, m interface{
 	vrf.Spec.ConnectionTracking = d.Get("connection_tracking_mode").(string)
 	vrf.Spec.AllowSessionReuse = d.Get("allow_session_reuse").(string)
 	vrfName := d.Get("name").(string)
-	if v, ok := d.GetOk("ingress_security_policy"); ok {
-		vrf.Spec.IngressSecurityPolicy = []interface{}{v.(string)}
-	}
-	if v, ok := d.GetOk("egress_security_policy"); ok {
-		vrf.Spec.EgressSecurityPolicy = []interface{}{v.(string)}
-	}
+	vrf.Spec.MaximumCpsPerNetworkPerDistributedServicesEntity = d.Get("maximum_cps_per_network").(int)
+	vrf.Spec.MaximumSessionsPerNetworkPerDistributedServicesEntity = d.Get("maximum_sessions_per_network").(int)
+
+    if v, ok := d.GetOk("ingress_security_policy"); ok {
+        vrf.Spec.IngressSecurityPolicy = expandStringList(v.([]interface{}))
+    }
+    if v, ok := d.GetOk("egress_security_policy"); ok {
+        vrf.Spec.EgressSecurityPolicy = expandStringList(v.([]interface{}))
+    }
+    if v, ok := d.GetOk("ingress_nat_policy"); ok {
+        vrf.Spec.IngressNatPolicy = expandStringList(v.([]interface{}))
+    }
+    if v, ok := d.GetOk("egress_nat_policy"); ok {
+        vrf.Spec.EgressNatPolicy = expandStringList(v.([]interface{}))
+    }
+    if v, ok := d.GetOk("ipsec_policy"); ok {
+        vrf.Spec.IpsecPolicy = expandStringList(v.([]interface{}))
+    }
+    if v, ok := d.GetOk("flow_export_policy"); ok {
+        vrf.Spec.FlowExportPolicy = expandStringList(v.([]interface{}))
+    }
+
 	if vrfName == "default" {
 		d.SetId("default")
 		return nil
@@ -292,4 +365,48 @@ func resourceVRFUpdate(ctx context.Context, d *schema.ResourceData, m interface{
 	log.Printf("[DEBUG] VRF updated with UUID: %s", responseBody.Meta.UUID.(string))
 
 	return append(diag.Diagnostics{}, resourceVRFRead(ctx, d, m)...)
+}
+
+func resourceVRFImport(ctx context.Context, d *schema.ResourceData, m interface{}) ([]*schema.ResourceData, error) {
+	config := m.(*Config)
+
+	name := d.Id()
+
+	url := fmt.Sprintf("%s/configs/network/v1/tenant/default/virtualrouters/%s", config.Server, name)
+
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("error creating request to import VRF: %v", err)
+	}
+
+	req.AddCookie(&http.Cookie{Name: "sid", Value: config.SID})
+
+	client := config.Client()
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("error importing VRF: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("failed to import VRF: HTTP %s", resp.Status)
+	}
+
+	var vrf VRF
+	if err := json.NewDecoder(resp.Body).Decode(&vrf); err != nil {
+		return nil, fmt.Errorf("error decoding VRF response: %v", err)
+	}
+
+	d.SetId(vrf.Meta.UUID.(string))
+	d.Set("name", vrf.Meta.Name)
+	d.Set("ingress_security_policy", vrf.Spec.IngressSecurityPolicy)
+	d.Set("egress_security_policy", vrf.Spec.EgressSecurityPolicy)
+	d.Set("connection_tracking_mode", vrf.Spec.ConnectionTracking)
+	d.Set("allow_session_reuse", vrf.Spec.AllowSessionReuse)
+	d.Set("ingress_nat_policy", vrf.Spec.IngressNatPolicy)
+	d.Set("egress_nat_policy", vrf.Spec.EgressNatPolicy)
+	d.Set("ipsec_policy", vrf.Spec.IpsecPolicy)
+	d.Set("flow_export_policy", vrf.Spec.FlowExportPolicy)
+
+	return []*schema.ResourceData{d}, nil
 }
