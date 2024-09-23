@@ -11,6 +11,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
 )
 
 // Define the Terraform resource schema for ip_collections
@@ -21,59 +22,79 @@ func resourceIPCollection() *schema.Resource {
 		UpdateContext: resourceIPCollectionUpdate,
 		DeleteContext: resourceIPCollectionDelete,
 		Importer: &schema.ResourceImporter{
-			StateContext: resourceIPCollectionImport,
+			StateContext: schema.ImportStatePassthroughContext,
 		},
 		Schema: map[string]*schema.Schema{
-			"name": {
+			"display_name": {
 				Type:     schema.TypeString,
 				Required: true,
-				ForceNew: true,
+			},
+			"name": {
+				Type:     schema.TypeString,
+				Computed: true,
+			},
+			"tenant": {
+				Type:     schema.TypeString,
+				Optional: true,
+				Default:  "default",
 			},
 			"addresses": {
 				Type:     schema.TypeList,
 				Optional: true,
 				Elem:     &schema.Schema{Type: schema.TypeString},
-				ForceNew: false,
 			},
 			"ip_collections": {
 				Type:     schema.TypeList,
 				Optional: true,
 				Elem:     &schema.Schema{Type: schema.TypeString},
-				ForceNew: false,
+			},
+			"address_family": {
+				Type:     schema.TypeString,
+				Optional: true,
+				Default:  "IPv4",
+				ValidateFunc: validation.StringInSlice([]string{
+					"IPv4",
+					"IPv6",
+				}, false),
 			},
 		},
 	}
 }
 
-// Define the data model for ip_collections
 type IPCollection struct {
 	Kind       interface{} `json:"kind"`
 	APIVersion interface{} `json:"api-version"`
 	Meta       struct {
-		Name   string `json:"name"`
-		Tenant string `json:"tenant"`
+		Name        string      `json:"name"`
+		DisplayName string      `json:"display-name"`
+		Tenant      string      `json:"tenant"`
+		Namespace   interface{} `json:"namespace"`
+		UUID        string      `json:"uuid"`
 	} `json:"meta"`
 	Spec struct {
 		Addresses     []string `json:"addresses"`
 		IPCollections []string `json:"ipcollections"`
+		AddressFamily string   `json:"AddressFamily"`
 	} `json:"spec"`
 }
 
-// Implement the Create method for ip_collections
 func resourceIPCollectionCreate(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
 	config := m.(*Config)
 	client := config.Client()
 
 	ipCollection := &IPCollection{}
-	ipCollection.Meta.Name = d.Get("name").(string)
+	ipCollection.Meta.DisplayName = d.Get("display_name").(string)
+	ipCollection.Meta.Tenant = d.Get("tenant").(string)
+	ipCollection.Spec.AddressFamily = d.Get("address_family").(string)
+
 	if addresses, ok := d.GetOk("addresses"); ok {
 		for _, addr := range addresses.([]interface{}) {
 			ipCollection.Spec.Addresses = append(ipCollection.Spec.Addresses, addr.(string))
 		}
 	}
 	if ipcollections, ok := d.GetOk("ip_collections"); ok {
-		for _, addr := range ipcollections.([]interface{}) {
-			ipCollection.Spec.IPCollections = append(ipCollection.Spec.IPCollections, addr.(string))
+		for _, coll := range ipcollections.([]interface{}) {
+			ipCollection.Spec.IPCollections = append(ipCollection.Spec.IPCollections, coll.(string))
 		}
 	}
 
@@ -110,17 +131,18 @@ func resourceIPCollectionCreate(ctx context.Context, d *schema.ResourceData, m i
 	log.Printf("[DEBUG] Request URL: %s", req.URL.String())
 	log.Printf("[DEBUG] Request body: %s", jsonBytes)
 
-	d.SetId(responseIPCollection.Meta.Name)
+	d.SetId(responseIPCollection.Meta.UUID)
+	d.Set("name", responseIPCollection.Meta.Name)
+	d.Set("address_family", responseIPCollection.Spec.AddressFamily)
 
 	return resourceIPCollectionRead(ctx, d, m)
 }
 
-// Implement the Read method for ip_collections
 func resourceIPCollectionRead(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
 	config := m.(*Config)
 	client := config.Client()
 
-	url := config.Server + "/configs/network/v1/tenant/default/ipcollections/" + d.Get("name").(string)
+	url := fmt.Sprintf("%s/configs/network/v1/tenant/default/ipcollections/%s", config.Server, d.Id())
 
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
@@ -136,7 +158,6 @@ func resourceIPCollectionRead(ctx context.Context, d *schema.ResourceData, m int
 	defer resp.Body.Close()
 
 	if resp.StatusCode == http.StatusNotFound {
-		// If the resource doesn't exist, remove it from the state
 		d.SetId("")
 		return nil
 	}
@@ -150,9 +171,12 @@ func resourceIPCollectionRead(ctx context.Context, d *schema.ResourceData, m int
 		return diag.FromErr(err)
 	}
 
+	d.Set("display_name", ipCollection.Meta.DisplayName)
 	d.Set("name", ipCollection.Meta.Name)
+	d.Set("tenant", ipCollection.Meta.Tenant)
 	d.Set("addresses", ipCollection.Spec.Addresses)
-	d.Set("ipcollections", ipCollection.Spec.IPCollections)
+	d.Set("ip_collections", ipCollection.Spec.IPCollections)
+	d.Set("address_family", ipCollection.Spec.AddressFamily)
 
 	return nil
 }
@@ -162,18 +186,21 @@ func resourceIPCollectionUpdate(ctx context.Context, d *schema.ResourceData, m i
 	client := config.Client()
 
 	ipCollection := &IPCollection{}
-	ipCollection.Meta.Name = d.Get("name").(string)
-	if d.HasChange("addresses") {
-		ipCollection.Spec.Addresses = nil
-		for _, addr := range d.Get("addresses").([]interface{}) {
-			ipCollection.Spec.Addresses = append(ipCollection.Spec.Addresses, addr.(string))
-		}
+	ipCollection.Meta.Name = d.Id()
+	ipCollection.Meta.DisplayName = d.Get("display_name").(string)
+	ipCollection.Meta.Tenant = d.Get("tenant").(string)
+	ipCollection.Spec.AddressFamily = d.Get("address_family").(string)
+
+	addresses := d.Get("addresses").([]interface{})
+	ipCollection.Spec.Addresses = make([]string, len(addresses))
+	for i, addr := range addresses {
+		ipCollection.Spec.Addresses[i] = addr.(string)
 	}
-	if d.HasChange("ip_collections") {
-		ipCollection.Spec.IPCollections = nil
-		for _, addr := range d.Get("ip_collections").([]interface{}) {
-			ipCollection.Spec.IPCollections = append(ipCollection.Spec.IPCollections, addr.(string))
-		}
+
+	ipCollections := d.Get("ip_collections").([]interface{})
+	ipCollection.Spec.IPCollections = make([]string, len(ipCollections))
+	for i, coll := range ipCollections {
+		ipCollection.Spec.IPCollections[i] = coll.(string)
 	}
 
 	jsonBytes, err := json.Marshal(ipCollection)
@@ -181,11 +208,12 @@ func resourceIPCollectionUpdate(ctx context.Context, d *schema.ResourceData, m i
 		return diag.FromErr(err)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, "PUT", config.Server+"/configs/network/v1/tenant/default/ipcollections/"+d.Id(), bytes.NewBuffer(jsonBytes))
+	url := fmt.Sprintf("%s/configs/network/v1/tenant/default/ipcollections/%s", config.Server, d.Id())
+	req, err := http.NewRequestWithContext(ctx, "PUT", url, bytes.NewBuffer(jsonBytes))
 	if err != nil {
 		return diag.FromErr(err)
 	}
-
+	req.Header.Set("Content-Type", "application/json")
 	req.AddCookie(&http.Cookie{Name: "sid", Value: config.SID})
 
 	resp, err := client.Do(req)
@@ -194,33 +222,25 @@ func resourceIPCollectionUpdate(ctx context.Context, d *schema.ResourceData, m i
 	}
 	defer resp.Body.Close()
 
-	bodyBytes, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
 		return diag.Errorf("failed to update ip_collection: HTTP %d %s: %s", resp.StatusCode, resp.Status, bodyBytes)
 	}
-
-	// Log the request details
-	log.Printf("[DEBUG] Request method: %s", req.Method)
-	log.Printf("[DEBUG] Request URL: %s", req.URL.String())
-	log.Printf("[DEBUG] Request body: %s", jsonBytes)
 
 	return resourceIPCollectionRead(ctx, d, m)
 }
 
-// Implement the Delete method for ip_collections
 func resourceIPCollectionDelete(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
 	config := m.(*Config)
 	client := config.Client()
 
-	// Construct the URL for the ipCollection based on its name
-	url := config.Server + "/configs/network/v1/tenant/default/ipcollections/" + d.Get("name").(string)
+	url := fmt.Sprintf("%s/configs/network/v1/tenant/default/ipcollections/%s", config.Server, d.Id())
 
 	req, err := http.NewRequestWithContext(ctx, "DELETE", url, nil)
 	if err != nil {
 		return diag.FromErr(err)
 	}
 
-	// Set SID cookie for authentication
 	req.AddCookie(&http.Cookie{Name: "sid", Value: config.SID})
 
 	resp, err := client.Do(req)
@@ -233,24 +253,7 @@ func resourceIPCollectionDelete(ctx context.Context, d *schema.ResourceData, m i
 		return diag.Errorf("failed to delete ip_collection: HTTP %s", resp.Status)
 	}
 
-	// Clear the resource ID as it's been deleted from the PSM server.
 	d.SetId("")
 
 	return nil
-}
-
-func resourceIPCollectionImport(ctx context.Context, d *schema.ResourceData, m interface{}) ([]*schema.ResourceData, error) {
-	// The ID passed will be the name of the IP collection
-	name := d.Id()
-
-	// Set the name in the ResourceData
-	d.Set("name", name)
-
-	// Call Read to populate the rest of the data
-	diags := resourceIPCollectionRead(ctx, d, m)
-	if diags.HasError() {
-		return nil, fmt.Errorf("failed to read imported IP collection: %v", diags)
-	}
-
-	return []*schema.ResourceData{d}, nil
 }
