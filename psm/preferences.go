@@ -139,17 +139,26 @@ func resourcePSMUIGlobalSettingsRead(ctx context.Context, d *schema.ResourceData
 	}
 	defer resp.Body.Close()
 
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return diag.FromErr(fmt.Errorf("error reading response body: %v", err))
+	}
+
 	if resp.StatusCode == http.StatusNotFound {
 		d.SetId("")
 		return nil
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return diag.Errorf("API request failed: %s", resp.Status)
+		return diag.Errorf("API request failed: %s - %s", resp.Status, string(body))
+	}
+
+	if len(body) == 0 {
+		return diag.Errorf("empty response body")
 	}
 
 	var result UIGlobalSettings
-	err = json.NewDecoder(resp.Body).Decode(&result)
+	err = json.Unmarshal(body, &result)
 	if err != nil {
 		return diag.FromErr(fmt.Errorf("error decoding response: %v", err))
 	}
@@ -158,6 +167,9 @@ func resourcePSMUIGlobalSettingsRead(ctx context.Context, d *schema.ResourceData
 	d.Set("duration", result.Spec.IdleTimeout.Duration)
 	d.Set("warning_time", result.Spec.IdleTimeout.WarningTime)
 	d.Set("enable_object_renaming", result.Spec.EnableObjectRenaming)
+
+	// Set the ID to ensure consistency
+	d.SetId("default-ui-global-settings")
 
 	return nil
 }
