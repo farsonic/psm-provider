@@ -416,3 +416,53 @@ func validateNATRules(rules []interface{}) error {
 	}
 	return nil
 }
+
+func expandPermissions(permissions []interface{}) []struct {
+	ResourceGroup     string   `json:"resource-group"`
+	ResourceKind      string   `json:"resource-kind"`
+	ResourceNamespace string   `json:"resource-namespace"`
+	Actions           []string `json:"actions"`
+} {
+	result := make([]struct {
+		ResourceGroup     string   `json:"resource-group"`
+		ResourceKind      string   `json:"resource-kind"`
+		ResourceNamespace string   `json:"resource-namespace"`
+		Actions           []string `json:"actions"`
+	}, len(permissions))
+
+	for i, perm := range permissions {
+		p := perm.(map[string]interface{})
+		result[i] = struct {
+			ResourceGroup     string   `json:"resource-group"`
+			ResourceKind      string   `json:"resource-kind"`
+			ResourceNamespace string   `json:"resource-namespace"`
+			Actions           []string `json:"actions"`
+		}{
+			ResourceGroup:     p["resource_group"].(string),
+			ResourceKind:      p["resource_kind"].(string),
+			ResourceNamespace: "*_ALL_*",
+			Actions:           expandStringList(p["actions"].([]interface{})),
+		}
+	}
+
+	return result
+}
+
+func flattenPermissions(permissions []struct {
+	ResourceGroup     string   `json:"resource-group"`
+	ResourceKind      string   `json:"resource-kind"`
+	ResourceNamespace string   `json:"resource-namespace"`
+	Actions           []string `json:"actions"`
+}) []interface{} {
+	result := make([]interface{}, len(permissions))
+
+	for i, perm := range permissions {
+		result[i] = map[string]interface{}{
+			"resource_group": perm.ResourceGroup,
+			"resource_kind":  perm.ResourceKind,
+			"actions":        perm.Actions,
+		}
+	}
+
+	return result
+}
