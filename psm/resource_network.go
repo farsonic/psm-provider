@@ -29,13 +29,11 @@ func resourceNetwork() *schema.Resource {
 			"tenant": {
 				Type:     schema.TypeString,
 				Optional: true,
-				//Default:  "default",
 				ForceNew: true,
 			},
 			"vlan_id": {
 				Type:     schema.TypeInt,
-				Optional: true,
-				Default:  0,
+				Required: true,
 				ForceNew: true,
 			},
 			"virtual_router": {
