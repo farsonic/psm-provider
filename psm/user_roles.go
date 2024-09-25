@@ -332,6 +332,10 @@ func resourceRoleImport(ctx context.Context, d *schema.ResourceData, m interface
 	}
 	defer res.Body.Close()
 
+	if res.StatusCode == http.StatusNotFound {
+		return nil, fmt.Errorf("role not found: %s", name)
+	}
+
 	if res.StatusCode != http.StatusOK {
 		bodyBytes, err := io.ReadAll(res.Body)
 		if err != nil {
@@ -346,59 +350,10 @@ func resourceRoleImport(ctx context.Context, d *schema.ResourceData, m interface
 	}
 
 	d.SetId(role.Meta.UUID)
+	d.Set("tenant", tenant)
 	d.Set("name", role.Meta.Name)
 	d.Set("namespace", namespace)
 	d.Set("permissions", flattenPermissions(role.Spec.Permissions))
 
 	return []*schema.ResourceData{d}, nil
-}
-
-func expandPermissions(permissions []interface{}) []struct {
-	ResourceGroup     string   `json:"resource-group"`
-	ResourceKind      string   `json:"resource-kind"`
-	ResourceNamespace string   `json:"resource-namespace"`
-	Actions           []string `json:"actions"`
-} {
-	result := make([]struct {
-		ResourceGroup     string   `json:"resource-group"`
-		ResourceKind      string   `json:"resource-kind"`
-		ResourceNamespace string   `json:"resource-namespace"`
-		Actions           []string `json:"actions"`
-	}, len(permissions))
-
-	for i, perm := range permissions {
-		p := perm.(map[string]interface{})
-		result[i] = struct {
-			ResourceGroup     string   `json:"resource-group"`
-			ResourceKind      string   `json:"resource-kind"`
-			ResourceNamespace string   `json:"resource-namespace"`
-			Actions           []string `json:"actions"`
-		}{
-			ResourceGroup:     p["resource_group"].(string),
-			ResourceKind:      p["resource_kind"].(string),
-			ResourceNamespace: "*_ALL_*",
-			Actions:           expandStringList(p["actions"].([]interface{})),
-		}
-	}
-
-	return result
-}
-
-func flattenPermissions(permissions []struct {
-	ResourceGroup     string   `json:"resource-group"`
-	ResourceKind      string   `json:"resource-kind"`
-	ResourceNamespace string   `json:"resource-namespace"`
-	Actions           []string `json:"actions"`
-}) []interface{} {
-	result := make([]interface{}, len(permissions))
-
-	for i, perm := range permissions {
-		result[i] = map[string]interface{}{
-			"resource_group": perm.ResourceGroup,
-			"resource_kind":  perm.ResourceKind,
-			"actions":        perm.Actions,
-		}
-	}
-
-	return result
 }
