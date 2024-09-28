@@ -85,17 +85,18 @@ func resourceNATPolicy() *schema.Resource {
 						},
 						"destination_proto_port": {
 							Type:     schema.TypeList,
+							Optional: true,
 							MaxItems: 1,
-							Required: true,
 							Elem: &schema.Resource{
 								Schema: map[string]*schema.Schema{
 									"protocol": {
 										Type:     schema.TypeString,
-										Required: true,
+										Optional: true,
 									},
 									"ports": {
 										Type:     schema.TypeString,
-										Required: true,
+										Optional: true,
+										Default:  "",
 									},
 								},
 							},
@@ -185,9 +186,9 @@ type NatRule struct {
 		Any           bool     `json:"any,omitempty"`
 	} `json:"destination"`
 	DestinationProtoPort struct {
-		Protocol string `json:"protocol"`
-		Ports    string `json:"ports"`
-	} `json:"destination-proto-port"`
+		Protocol string `json:"protocol,omitempty"`
+		Ports    string `json:"ports,omitempty"`
+	} `json:"destination-proto-port,omitempty"`
 	TranslatedSource *struct {
 		Addresses     []string `json:"addresses,omitempty"`
 		IPCollections []string `json:"ipcollections,omitempty"`
@@ -242,12 +243,11 @@ func resourceNATPolicyCreate(ctx context.Context, d *schema.ResourceData, m inte
 
 		if destProtoPort, ok := r["destination_proto_port"].([]interface{}); ok && len(destProtoPort) > 0 {
 			dpp := destProtoPort[0].(map[string]interface{})
-			natRule.DestinationProtoPort = struct {
-				Protocol string `json:"protocol"`
-				Ports    string `json:"ports"`
-			}{
-				Protocol: dpp["protocol"].(string),
-				Ports:    dpp["ports"].(string),
+			if protocol, ok := dpp["protocol"].(string); ok && protocol != "" {
+				natRule.DestinationProtoPort.Protocol = protocol
+			}
+			if ports, ok := dpp["ports"].(string); ok && ports != "" {
+				natRule.DestinationProtoPort.Ports = ports
 			}
 		}
 
@@ -465,12 +465,11 @@ func resourceNATPolicyUpdate(ctx context.Context, d *schema.ResourceData, m inte
 
 		if destProtoPort, ok := r["destination_proto_port"].([]interface{}); ok && len(destProtoPort) > 0 {
 			dpp := destProtoPort[0].(map[string]interface{})
-			natRule.DestinationProtoPort = struct {
-				Protocol string `json:"protocol"`
-				Ports    string `json:"ports"`
-			}{
-				Protocol: dpp["protocol"].(string),
-				Ports:    dpp["ports"].(string),
+			if protocol, ok := dpp["protocol"].(string); ok && protocol != "" {
+				natRule.DestinationProtoPort.Protocol = protocol
+			}
+			if ports, ok := dpp["ports"].(string); ok && ports != "" {
+				natRule.DestinationProtoPort.Ports = ports
 			}
 		}
 

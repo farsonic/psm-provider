@@ -373,8 +373,8 @@ func validateNATRules(rules []interface{}) error {
 			return fmt.Errorf("rule %d: protocol in destination_proto_port is required", i)
 		}
 		ports, ok := dpp["ports"].(string)
-		if !ok || ports == "" {
-			return fmt.Errorf("rule %d: ports in destination_proto_port is required", i)
+		if protocol != "any" && (!ok || ports == "") {
+			return fmt.Errorf("rule %d: ports in destination_proto_port is required when protocol is not 'any'", i)
 		}
 
 		// Validate translated_source and translated_destination
