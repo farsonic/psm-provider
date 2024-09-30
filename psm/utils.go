@@ -339,81 +339,111 @@ func validateNATRules(rules []interface{}) error {
 		}
 
 		// Validate source
-		source, ok := rule["source"].([]interface{})
-		if !ok || len(source) == 0 {
-			return fmt.Errorf("rule %d: source is required", i)
-		}
-		sourceMap := source[0].(map[string]interface{})
-		sourceAddresses := sourceMap["addresses"].([]interface{})
-		sourceIPCollections := sourceMap["ipcollections"].([]interface{})
-		if len(sourceAddresses) == 0 && len(sourceIPCollections) == 0 {
-			return fmt.Errorf("rule %d: source must have either addresses or ipcollections", i)
+		if err := validateAddressOrCollection(rule, "source", i); err != nil {
+			return err
 		}
 
-		// Validate destination
-		destination, ok := rule["destination"].([]interface{})
-		if !ok || len(destination) == 0 {
-			return fmt.Errorf("rule %d: destination is required", i)
-		}
-		destMap := destination[0].(map[string]interface{})
-		destAddresses := destMap["addresses"].([]interface{})
-		destIPCollections := destMap["ipcollections"].([]interface{})
-		if len(destAddresses) == 0 && len(destIPCollections) == 0 {
-			return fmt.Errorf("rule %d: destination must have either addresses or ipcollections", i)
+		// Validate destination (optional)
+		if destination, ok := rule["destination"].([]interface{}); ok && len(destination) > 0 {
+			if err := validateAddressOrCollection(rule, "destination", i); err != nil {
+				return err
+			}
 		}
 
-		// Validate destination_proto_port
-		destProtoPort, ok := rule["destination_proto_port"].([]interface{})
-		if !ok || len(destProtoPort) == 0 {
-			return fmt.Errorf("rule %d: destination_proto_port is required", i)
-		}
-		dpp := destProtoPort[0].(map[string]interface{})
-		protocol, ok := dpp["protocol"].(string)
-		if !ok || protocol == "" {
-			return fmt.Errorf("rule %d: protocol in destination_proto_port is required", i)
-		}
-		ports, ok := dpp["ports"].(string)
-		if protocol != "any" && (!ok || ports == "") {
-			return fmt.Errorf("rule %d: ports in destination_proto_port is required when protocol is not 'any'", i)
+		// Validate destination_proto_port (optional)
+		if destProtoPort, ok := rule["destination_proto_port"].([]interface{}); ok && len(destProtoPort) > 0 {
+			dpp := destProtoPort[0].(map[string]interface{})
+			protocol, ok := dpp["protocol"].(string)
+			if !ok || protocol == "" {
+				return fmt.Errorf("rule %d: protocol in destination_proto_port is required if destination_proto_port is specified", i)
+			}
+			// Ports are optional, no need to validate
 		}
 
-		// Validate translated_source and translated_destination
-		translatedSource, hasTranslatedSource := rule["translated_source"].([]interface{})
-		translatedDest, hasTranslatedDest := rule["translated_destination"].([]interface{})
+		// Validate that at least one of translated_source or translated_destination is specified
+		hasTranslatedSource := rule["translated_source"] != nil
+		hasTranslatedDest := rule["translated_destination"] != nil
 
 		if !hasTranslatedSource && !hasTranslatedDest {
 			return fmt.Errorf("rule %d: either translated_source or translated_destination must be specified", i)
 		}
 
-		if hasTranslatedSource && len(translatedSource) > 0 {
-			ts := translatedSource[0].(map[string]interface{})
-			tsAddresses := ts["addresses"].([]interface{})
-			tsIPCollections := ts["ipcollections"].([]interface{})
-			if len(tsAddresses) == 0 && len(tsIPCollections) == 0 {
-				return fmt.Errorf("rule %d: translated_source must have either addresses or ipcollections", i)
-			}
-		}
-
-		if hasTranslatedDest && len(translatedDest) > 0 {
-			td := translatedDest[0].(map[string]interface{})
-			tdAddresses := td["addresses"].([]interface{})
-			tdIPCollections := td["ipcollections"].([]interface{})
-			if len(tdAddresses) == 0 && len(tdIPCollections) == 0 {
-				return fmt.Errorf("rule %d: translated_destination must have either addresses or ipcollections", i)
-			}
-		}
-
-		// Validate translated_destination_port
-		translatedDestPort, hasTranslatedDestPort := rule["translated_destination_port"].(string)
-		if hasTranslatedDestPort && translatedDestPort != "" {
-			if protocol == "any" {
-				return fmt.Errorf("rule %d: protocol cannot be 'any' when translated_destination_port is set", i)
-			}
+		// Validate translated_destination_port (optional)
+		if translatedDestPort, ok := rule["translated_destination_port"].(string); ok && translatedDestPort != "" {
 			if !hasTranslatedDest {
 				return fmt.Errorf("rule %d: translated_destination is required when translated_destination_port is specified", i)
 			}
 		}
 	}
+	return nil
+}
+
+func createNatRule(r map[string]interface{}) NatRule {
+	natRule := NatRule{
+		Name:    r["name"].(string),
+		Disable: r["disable"].(bool),
+		Type:    r["type"].(string),
+	}
+
+	if source, ok := r["source"].([]interface{}); ok && len(source) > 0 {
+		setAddressOrCollection(&natRule.Source, source[0].(map[string]interface{}))
+	}
+
+	if destination, ok := r["destination"].([]interface{}); ok && len(destination) > 0 {
+		setAddressOrCollection(&natRule.Destination, destination[0].(map[string]interface{}))
+	}
+
+	if destProtoPort, ok := r["destination_proto_port"].([]interface{}); ok && len(destProtoPort) > 0 {
+		dpp := destProtoPort[0].(map[string]interface{})
+		natRule.DestinationProtoPort.Protocol = dpp["protocol"].(string)
+		if ports, ok := dpp["ports"].(string); ok {
+			natRule.DestinationProtoPort.Ports = ports
+		}
+	}
+
+	if translatedSource, ok := r["translated_source"].([]interface{}); ok && len(translatedSource) > 0 {
+		setAddressOrCollection(&natRule.TranslatedSource, translatedSource[0].(map[string]interface{}))
+	}
+
+	if translatedDest, ok := r["translated_destination"].([]interface{}); ok && len(translatedDest) > 0 {
+		setAddressOrCollection(&natRule.TranslatedDestination, translatedDest[0].(map[string]interface{}))
+	} else if natRule.Type == "static" && !natRule.Destination.Any {
+		// For static NAT, if translated_destination is not provided but destination is,
+		// set translated_destination to be the same as destination
+		natRule.TranslatedDestination = natRule.Destination
+	}
+
+	if translatedDestPort, ok := r["translated_destination_port"].(string); ok {
+		natRule.TranslatedDestinationPort = translatedDestPort
+	}
+
+	return natRule
+}
+
+func setAddressOrCollection(target *AddressCollection, source map[string]interface{}) {
+	if addresses, ok := source["addresses"].([]interface{}); ok && len(addresses) > 0 {
+		target.Addresses = expandStringList(addresses)
+	}
+	if ipCollections, ok := source["ipcollections"].([]interface{}); ok && len(ipCollections) > 0 {
+		target.IPCollections = expandStringList(ipCollections)
+	}
+	target.Any = len(target.Addresses) == 0 && len(target.IPCollections) == 0
+}
+
+func validateAddressOrCollection(rule map[string]interface{}, field string, ruleIndex int) error {
+	value, ok := rule[field].([]interface{})
+	if !ok || len(value) == 0 {
+		return fmt.Errorf("rule %d: %s is required", ruleIndex, field)
+	}
+
+	valueMap := value[0].(map[string]interface{})
+	addresses := valueMap["addresses"].([]interface{})
+	ipCollections := valueMap["ipcollections"].([]interface{})
+
+	if len(addresses) == 0 && len(ipCollections) == 0 {
+		return fmt.Errorf("rule %d: %s must have either addresses or ipcollections", ruleIndex, field)
+	}
+
 	return nil
 }
 
