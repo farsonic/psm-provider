@@ -74,7 +74,7 @@ type WorkloadGroup struct {
 		Namespace       interface{} `json:"namespace"`
 		GenerationID    interface{} `json:"generation-id"`
 		ResourceVersion interface{} `json:"resource-version"`
-		UUID            interface{} `json:"uuid"`
+		UUID            string      `json:"uuid"`
 		Labels          interface{} `json:"labels"`
 		SelfLink        interface{} `json:"self-link"`
 		DisplayName     interface{} `json:"display-name"`
@@ -171,12 +171,12 @@ func resourceWorkloadGroupCreate(ctx context.Context, d *schema.ResourceData, m 
 		}
 	}
 
-	responseBody := &Workload{}
+	responseBody := &WorkloadGroup{}
 	if err := json.NewDecoder(resp.Body).Decode(responseBody); err != nil {
 		return diag.FromErr(err)
 	}
 
-	d.SetId(responseBody.Meta.UUID.(string))
+	d.SetId(responseBody.Meta.UUID)
 
 	return append(diag.Diagnostics{}, resourceWorkloadGroupRead(ctx, d, m)...)
 }
