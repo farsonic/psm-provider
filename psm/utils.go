@@ -1,6 +1,7 @@
 package psm
 
 import (
+	"bytes"
 	"fmt"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
@@ -495,4 +496,35 @@ func flattenPermissions(permissions []struct {
 	}
 
 	return result
+}
+
+func dscHash(v interface{}) int {
+	m := v.(map[string]interface{})
+	var buf bytes.Buffer
+	if id, ok := m["id"].(string); ok {
+		buf.WriteString(fmt.Sprintf("%s-", id))
+	}
+	if mac, ok := m["mac_address"].(string); ok {
+		buf.WriteString(fmt.Sprintf("%s-", mac))
+	}
+	return schema.HashString(buf.String())
+}
+
+func pnicHash(v interface{}) int {
+	m := v.(map[string]interface{})
+	return schema.HashString(m["mac_address"].(string) + m["name"].(string))
+}
+
+func determineHostType(d *schema.ResourceData) string {
+	hasDSCs := d.Get("dscs").(*schema.Set).Len() > 0
+	hasPNICs := d.Get("pnic_info").(*schema.Set).Len() > 0
+
+	if hasDSCs && hasPNICs {
+		return "both"
+	} else if hasDSCs {
+		return "dss"
+	} else if hasPNICs {
+		return "pnic"
+	}
+	return ""
 }
