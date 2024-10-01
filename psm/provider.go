@@ -36,6 +36,7 @@ func Provider() *schema.Provider {
 			"psm_certificate":          resourceCertificate(),
 			"psm_nat_policy":           resourceNATPolicy(),
 			"psm_user_preferences":     resourcePSMUserPreferences(),
+			"psm_hosts":                resourceHosts(),
 		},
 		Schema: map[string]*schema.Schema{
 			"user": {
