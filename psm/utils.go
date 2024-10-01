@@ -379,46 +379,59 @@ func validateNATRules(rules []interface{}) error {
 	return nil
 }
 
-func createNatRule(r map[string]interface{}) NatRule {
+func createNatRule(rule map[string]interface{}) NatRule {
 	natRule := NatRule{
-		Name:    r["name"].(string),
-		Disable: r["disable"].(bool),
-		Type:    r["type"].(string),
+		Name:    rule["name"].(string),
+		Disable: rule["disable"].(bool),
+		Type:    rule["type"].(string),
 	}
 
-	if source, ok := r["source"].([]interface{}); ok && len(source) > 0 {
-		setAddressOrCollection(&natRule.Source, source[0].(map[string]interface{}))
+	if source, ok := rule["source"].([]interface{}); ok && len(source) > 0 {
+		natRule.Source = createAddressCollection(source[0].(map[string]interface{}))
 	}
 
-	if destination, ok := r["destination"].([]interface{}); ok && len(destination) > 0 {
-		setAddressOrCollection(&natRule.Destination, destination[0].(map[string]interface{}))
-	}
-
-	if destProtoPort, ok := r["destination_proto_port"].([]interface{}); ok && len(destProtoPort) > 0 {
-		dpp := destProtoPort[0].(map[string]interface{})
-		natRule.DestinationProtoPort.Protocol = dpp["protocol"].(string)
-		if ports, ok := dpp["ports"].(string); ok {
-			natRule.DestinationProtoPort.Ports = ports
+	if destination, ok := rule["destination"].([]interface{}); ok && len(destination) > 0 {
+		destMap := destination[0].(map[string]interface{})
+		addresses := expandStringList(destMap["addresses"].([]interface{}))
+		if len(addresses) == 1 && addresses[0] == "any" {
+			// If destination is "any", omit the destination field
+			natRule.Destination = nil
+		} else {
+			dest := createAddressCollection(destMap)
+			natRule.Destination = &dest
 		}
 	}
 
-	if translatedSource, ok := r["translated_source"].([]interface{}); ok && len(translatedSource) > 0 {
-		setAddressOrCollection(&natRule.TranslatedSource, translatedSource[0].(map[string]interface{}))
+	if protoPort, ok := rule["destination_proto_port"].([]interface{}); ok && len(protoPort) > 0 {
+		pp := protoPort[0].(map[string]interface{})
+		natRule.DestinationProtoPort.Protocol = pp["protocol"].(string)
+		if ports, ok := pp["ports"]; ok {
+			natRule.DestinationProtoPort.Ports = ports.(string)
+		}
 	}
 
-	if translatedDest, ok := r["translated_destination"].([]interface{}); ok && len(translatedDest) > 0 {
-		setAddressOrCollection(&natRule.TranslatedDestination, translatedDest[0].(map[string]interface{}))
-	} else if natRule.Type == "static" && !natRule.Destination.Any {
-		// For static NAT, if translated_destination is not provided but destination is,
-		// set translated_destination to be the same as destination
-		natRule.TranslatedDestination = natRule.Destination
+	if translatedSource, ok := rule["translated_source"].([]interface{}); ok && len(translatedSource) > 0 {
+		ts := createAddressCollection(translatedSource[0].(map[string]interface{}))
+		natRule.TranslatedSource = &ts
 	}
 
-	if translatedDestPort, ok := r["translated_destination_port"].(string); ok {
+	if translatedDest, ok := rule["translated_destination"].([]interface{}); ok && len(translatedDest) > 0 {
+		td := createAddressCollection(translatedDest[0].(map[string]interface{}))
+		natRule.TranslatedDestination = &td
+	}
+
+	if translatedDestPort, ok := rule["translated_destination_port"].(string); ok {
 		natRule.TranslatedDestinationPort = translatedDestPort
 	}
 
 	return natRule
+}
+
+func createAddressCollection(data map[string]interface{}) AddressCollection {
+	return AddressCollection{
+		Addresses:     expandStringList(data["addresses"].([]interface{})),
+		IPCollections: expandStringList(data["ipcollections"].([]interface{})),
+	}
 }
 
 func setAddressOrCollection(target *AddressCollection, source map[string]interface{}) {
