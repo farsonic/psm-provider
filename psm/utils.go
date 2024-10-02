@@ -322,10 +322,7 @@ func suppressMissingLifetimeValues(k, old, new string, d *schema.ResourceData) b
 
 func validateNATRules(rules []interface{}) error {
 	for i, r := range rules {
-		rule, ok := r.(map[string]interface{})
-		if !ok {
-			return fmt.Errorf("invalid rule type at index %d", i)
-		}
+		rule := r.(map[string]interface{})
 
 		// Validate name
 		name, ok := rule["name"].(string)
@@ -339,17 +336,9 @@ func validateNATRules(rules []interface{}) error {
 			return fmt.Errorf("rule %d: type is required", i)
 		}
 
-		// Validate source
-		if err := validateAddressOrCollection(rule, "source", i); err != nil {
-			return err
-		}
+		// Source is optional, no validation needed
 
-		// Validate destination (optional)
-		if destination, ok := rule["destination"].([]interface{}); ok && len(destination) > 0 {
-			if err := validateAddressOrCollection(rule, "destination", i); err != nil {
-				return err
-			}
-		}
+		// Destination is optional, no validation needed
 
 		// Validate destination_proto_port (optional)
 		if destProtoPort, ok := rule["destination_proto_port"].([]interface{}); ok && len(destProtoPort) > 0 {
@@ -362,8 +351,8 @@ func validateNATRules(rules []interface{}) error {
 		}
 
 		// Validate that at least one of translated_source or translated_destination is specified
-		hasTranslatedSource := rule["translated_source"] != nil
-		hasTranslatedDest := rule["translated_destination"] != nil
+		hasTranslatedSource := rule["translated_source"] != nil && len(rule["translated_source"].([]interface{})) > 0
+		hasTranslatedDest := rule["translated_destination"] != nil && len(rule["translated_destination"].([]interface{})) > 0
 
 		if !hasTranslatedSource && !hasTranslatedDest {
 			return fmt.Errorf("rule %d: either translated_source or translated_destination must be specified", i)
@@ -386,22 +375,25 @@ func createNatRule(rule map[string]interface{}) NatRule {
 		Type:    rule["type"].(string),
 	}
 
+	// Handle Source (optional)
 	if source, ok := rule["source"].([]interface{}); ok && len(source) > 0 {
-		natRule.Source = createAddressCollection(source[0].(map[string]interface{}))
+		sourceMap := source[0].(map[string]interface{})
+		src := createAddressCollection(sourceMap)
+		if len(src.Addresses) > 0 || len(src.IPCollections) > 0 {
+			natRule.Source = &src
+		}
 	}
 
+	// Handle Destination (optional)
 	if destination, ok := rule["destination"].([]interface{}); ok && len(destination) > 0 {
 		destMap := destination[0].(map[string]interface{})
-		addresses := expandStringList(destMap["addresses"].([]interface{}))
-		if len(addresses) == 1 && addresses[0] == "any" {
-			// If destination is "any", omit the destination field
-			natRule.Destination = nil
-		} else {
-			dest := createAddressCollection(destMap)
+		dest := createAddressCollection(destMap)
+		if len(dest.Addresses) > 0 || len(dest.IPCollections) > 0 {
 			natRule.Destination = &dest
 		}
 	}
 
+	// Handle DestinationProtoPort (optional)
 	if protoPort, ok := rule["destination_proto_port"].([]interface{}); ok && len(protoPort) > 0 {
 		pp := protoPort[0].(map[string]interface{})
 		natRule.DestinationProtoPort.Protocol = pp["protocol"].(string)
@@ -410,38 +402,38 @@ func createNatRule(rule map[string]interface{}) NatRule {
 		}
 	}
 
+	// Handle TranslatedSource (optional)
 	if translatedSource, ok := rule["translated_source"].([]interface{}); ok && len(translatedSource) > 0 {
-		ts := createAddressCollection(translatedSource[0].(map[string]interface{}))
-		natRule.TranslatedSource = &ts
+		tsMap := translatedSource[0].(map[string]interface{})
+		ts := createAddressCollection(tsMap)
+		if len(ts.Addresses) > 0 || len(ts.IPCollections) > 0 {
+			natRule.TranslatedSource = &ts
+		}
 	}
 
+	// Handle TranslatedDestination (optional)
 	if translatedDest, ok := rule["translated_destination"].([]interface{}); ok && len(translatedDest) > 0 {
-		td := createAddressCollection(translatedDest[0].(map[string]interface{}))
-		natRule.TranslatedDestination = &td
+		tdMap := translatedDest[0].(map[string]interface{})
+		td := createAddressCollection(tdMap)
+		if len(td.Addresses) > 0 || len(td.IPCollections) > 0 {
+			natRule.TranslatedDestination = &td
+		}
 	}
 
-	if translatedDestPort, ok := rule["translated_destination_port"].(string); ok {
+	// Handle TranslatedDestinationPort (optional)
+	if translatedDestPort, ok := rule["translated_destination_port"].(string); ok && translatedDestPort != "" {
 		natRule.TranslatedDestinationPort = translatedDestPort
 	}
 
 	return natRule
 }
 
+// Helper function to create AddressCollection
 func createAddressCollection(data map[string]interface{}) AddressCollection {
 	return AddressCollection{
 		Addresses:     expandStringList(data["addresses"].([]interface{})),
 		IPCollections: expandStringList(data["ipcollections"].([]interface{})),
 	}
-}
-
-func setAddressOrCollection(target *AddressCollection, source map[string]interface{}) {
-	if addresses, ok := source["addresses"].([]interface{}); ok && len(addresses) > 0 {
-		target.Addresses = expandStringList(addresses)
-	}
-	if ipCollections, ok := source["ipcollections"].([]interface{}); ok && len(ipCollections) > 0 {
-		target.IPCollections = expandStringList(ipCollections)
-	}
-	target.Any = len(target.Addresses) == 0 && len(target.IPCollections) == 0
 }
 
 func validateAddressOrCollection(rule map[string]interface{}, field string, ruleIndex int) error {
