@@ -330,7 +330,7 @@ type Meta struct {
 	UUID            *string                 `json:"uuid"`
 	Labels          *map[string]interface{} `json:"labels"`
 	SelfLink        *string                 `json:"self-link"`
-	DisplayName     map[string]interface{}  `json:"display-name"`
+	DisplayName     interface{}             `json:"display-name"`
 }
 
 type Spec struct {
