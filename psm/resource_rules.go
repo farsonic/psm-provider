@@ -13,6 +13,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
+/*
 func convertToStringSlice(input []interface{}) []string {
 	result := make([]string, len(input))
 	for i, v := range input {
@@ -20,6 +21,7 @@ func convertToStringSlice(input []interface{}) []string {
 	}
 	return result
 }
+*/
 
 func validateAction(val interface{}, key string) (warns []string, errs []error) {
 	v := val.(string)
