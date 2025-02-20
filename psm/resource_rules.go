@@ -197,10 +197,10 @@ func resourceRules() *schema.Resource {
 							ForceNew: true,
 						},
 						"action": {
-							Type:         schema.TypeString,
-							Optional:     true,
-							ForceNew:     true,
-							ValidateFunc: validateAction,
+							Type:     schema.TypeString,
+							Optional: true,
+							//ForceNew:     true,
+							//ValidateFunc: validateAction,
 						},
 					},
 				},
@@ -651,4 +651,22 @@ func resourceRulesDelete(ctx context.Context, d *schema.ResourceData, m interfac
 
 func convertToBool(input interface{}) bool {
 	return input.(bool)
+}
+
+func convertToStringSlice(input interface{}) []string {
+	var result []string
+	inputSlice, ok := input.([]interface{})
+	if !ok {
+		// handle the error accordingly
+		return result
+	}
+	for _, v := range inputSlice {
+		str, ok := v.(string)
+		if !ok {
+			// handle the error accordingly
+			continue
+		}
+		result = append(result, str)
+	}
+	return result
 }
