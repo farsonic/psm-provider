@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"log"
 	"net/http"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
@@ -16,6 +17,7 @@ func resourceIPCollection() *schema.Resource {
 	return &schema.Resource{
 		CreateContext: resourceIPCollectionCreate,
 		ReadContext:   resourceIPCollectionRead,
+		UpdateContext: resourceIPCollectionUpdate,
 		DeleteContext: resourceIPCollectionDelete,
 		Schema: map[string]*schema.Schema{
 			"name": {
@@ -27,7 +29,13 @@ func resourceIPCollection() *schema.Resource {
 				Type:     schema.TypeList,
 				Optional: true,
 				Elem:     &schema.Schema{Type: schema.TypeString},
-				ForceNew: true,
+				ForceNew: false,
+			},
+			"ip_collections": {
+				Type:     schema.TypeList,
+				Optional: true,
+				Elem:     &schema.Schema{Type: schema.TypeString},
+				ForceNew: false,
 			},
 		},
 	}
@@ -42,7 +50,8 @@ type IPCollection struct {
 		Tenant string `json:"tenant"`
 	} `json:"meta"`
 	Spec struct {
-		Addresses []string `json:"addresses"`
+		Addresses     []string `json:"addresses"`
+		IPCollections []string `json:"ipcollections"`
 	} `json:"spec"`
 }
 
@@ -56,6 +65,11 @@ func resourceIPCollectionCreate(ctx context.Context, d *schema.ResourceData, m i
 	if addresses, ok := d.GetOk("addresses"); ok {
 		for _, addr := range addresses.([]interface{}) {
 			ipCollection.Spec.Addresses = append(ipCollection.Spec.Addresses, addr.(string))
+		}
+	}
+	if ipcollections, ok := d.GetOk("ip_collections"); ok {
+		for _, addr := range ipcollections.([]interface{}) {
+			ipCollection.Spec.IPCollections = append(ipCollection.Spec.IPCollections, addr.(string))
 		}
 	}
 
@@ -86,6 +100,11 @@ func resourceIPCollectionCreate(ctx context.Context, d *schema.ResourceData, m i
 	if err := json.NewDecoder(bytes.NewBuffer(bodyBytes)).Decode(responseIPCollection); err != nil {
 		return diag.FromErr(err)
 	}
+
+	// Log the request details
+	log.Printf("[DEBUG] Request method: %s", req.Method)
+	log.Printf("[DEBUG] Request URL: %s", req.URL.String())
+	log.Printf("[DEBUG] Request body: %s", jsonBytes)
 
 	d.SetId(responseIPCollection.Meta.Name)
 
@@ -123,18 +142,36 @@ func resourceIPCollectionRead(ctx context.Context, d *schema.ResourceData, m int
 
 	d.Set("name", ipCollection.Meta.Name)
 	d.Set("addresses", ipCollection.Spec.Addresses)
+	d.Set("ipcollections", ipCollection.Spec.IPCollections)
 
 	return nil
 }
 
-// Implement the Delete method for ip_collections
-func resourceIPCollectionDelete(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
+func resourceIPCollectionUpdate(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
 	config := m.(*Config)
 	client := config.Client()
 
-	url := config.Server + "/configs/network/v1/tenant/default/ipcollections/" + d.Get("name").(string)
+	ipCollection := &IPCollection{}
+	ipCollection.Meta.Name = d.Get("name").(string)
+	if d.HasChange("addresses") {
+		ipCollection.Spec.Addresses = nil
+		for _, addr := range d.Get("addresses").([]interface{}) {
+			ipCollection.Spec.Addresses = append(ipCollection.Spec.Addresses, addr.(string))
+		}
+	}
+	if d.HasChange("ip_collections") {
+		ipCollection.Spec.IPCollections = nil
+		for _, addr := range d.Get("ip_collections").([]interface{}) {
+			ipCollection.Spec.IPCollections = append(ipCollection.Spec.IPCollections, addr.(string))
+		}
+	}
 
-	req, err := http.NewRequestWithContext(ctx, "DELETE", url, nil)
+	jsonBytes, err := json.Marshal(ipCollection)
+	if err != nil {
+		return diag.FromErr(err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "PUT", config.Server+"/configs/network/v1/tenant/default/ipcollections/"+d.Id(), bytes.NewBuffer(jsonBytes))
 	if err != nil {
 		return diag.FromErr(err)
 	}
@@ -147,10 +184,46 @@ func resourceIPCollectionDelete(ctx context.Context, d *schema.ResourceData, m i
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
+	bodyBytes, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != http.StatusOK {
+		return diag.Errorf("failed to update ip_collection: HTTP %d %s: %s", resp.StatusCode, resp.Status, bodyBytes)
+	}
+
+	// Log the request details
+	log.Printf("[DEBUG] Request method: %s", req.Method)
+	log.Printf("[DEBUG] Request URL: %s", req.URL.String())
+	log.Printf("[DEBUG] Request body: %s", jsonBytes)
+
+	return resourceIPCollectionRead(ctx, d, m)
+}
+
+// Implement the Delete method for ip_collections
+func resourceIPCollectionDelete(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
+	config := m.(*Config)
+	client := config.Client()
+
+	// Construct the URL for the ipCollection based on its name
+	url := config.Server + "/configs/network/v1/tenant/default/ipcollections/" + d.Get("name").(string)
+
+	req, err := http.NewRequestWithContext(ctx, "DELETE", url, nil)
+	if err != nil {
+		return diag.FromErr(err)
+	}
+
+	// Set SID cookie for authentication
+	req.AddCookie(&http.Cookie{Name: "sid", Value: config.SID})
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return diag.FromErr(err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
 		return diag.Errorf("failed to delete ip_collection: HTTP %s", resp.Status)
 	}
 
+	// Clear the resource ID as it's been deleted from the PSM server.
 	d.SetId("")
 
 	return nil

@@ -1,8 +1,20 @@
 # psm-provider
 
+## Build Process 
+Currently the provider is distributed and built from Github. Build the code locally and then reference this provider. 
 
-## Installation
-Currently the code is installed directly from Github where there is a Main repo and a Dev repository. Current expections are that the provider is being installed using a Linux or WSL based platform which it has been tested against. You will need to have git tools installed and a functional build system. 
+```
+sudo apt update
+sudo apt install golang git
+git clone git clone https://github.com/farsonic/psm-provider.git
+cd psm-provider
+go mod tidy
+make install 
+```
+
+The code will now be placed into ~/.terraform.d/plugins/local/provider/psm/X.X.X/linux_amd64 where is the version number of the build. This should be referenced as local/provider/psm. Once you install the provider it will be hosted locally with the current **Hostname = local** and the **Namespace = provider**. The Name of the provider is **PSM**.
+
+Within your Terraform infrastructure file (ie main.tf) specify the provider with the following syntax. You can specify the version if wanted but it will always use the latest. If you do specify the version you will need to use the -upgrade switch to force an upgrade. 
 
 ```
 git clone https://github.com/farsonic/psm-provider.git 
@@ -14,11 +26,11 @@ Once you install the provider it will be hosted locally with the current **Hostn
 
 Within your Terraform infrastructure file (ie main.tf) specify the provider with the following syntax. 
 
+
 ```
 terraform { 
   required_providers {
    psm = { 
-      version = "0.1.81" 
       source = "local/provider/psm"
   }
  }
@@ -44,6 +56,8 @@ VRF's provide isolation of routing tables as well as networks within the platfor
 ```
 resource "psm_vrf" "customerABC" { 
   name = "CustomerABC"
+  allow_session_reuse      = "enable"
+  connection_tracking_mode = "enable"
 }
 ```
 
@@ -54,6 +68,11 @@ Within PSM a network definition defines the name of the network and the VLAN tha
 ```
 resource "psm_network" "network" {
   name     = "DatabaseNetwork"
+  vlan_id  = 123
+  connection_tracking_mode = "disable"
+  allow_session_reuse      = "disable"
+  service_bypass           = true
+  virtual_router           = "CustomerABC"
   tenant   = "default" 
   vlan_id  = 123
 }
@@ -65,6 +84,24 @@ PSM allows the user to create groups of IP Addresses called IP Collections. Thes
 ```
 resource "psm_ipcollection" "ipcollections" {
   name     = "DatabaseServers"
+  addresses = ["10.10.10.0/24"]
+}
+```
+
+An IP collection can also be nested. A nested IP collection is one that references another IP Collection. Up to four levels of nesting is supported with IP Collections.
+
+```
+resource "psm_ipcollection" "db01" {
+  name     = "DatabaseServer01"
+  addresses = ["10.10.10.100/32"]
+}
+resource "psm_ipcollection" "db02" {
+  name     = "DatabaseServer02"
+  addresses = ["10.10.10.101/32"]
+}
+resource "psm_ipcollection" "dbsrvs" {
+  name     = "DatabaseServers"
+  ip_collections = ["DatabaseServer01", "DatabaseServer02"]
   addresses = ["10.10.10.0/24"] 
 }
 ```
@@ -84,6 +121,14 @@ resource "psm_rules" "ApplicationA_Stack" {
       to_ip_addresses     = ["10.10.0.0/23", "10.99.1.1/32"]
       from_ip_collections = ["network2","network1"]
       to_ip_collections   = ["network4"]
+      from_workloadgroups = ["WorkloadGroup1","WorkloadGroup2"]
+      to_workloadgroups   = ["WorkloadGroup3","WorkloadGroup4"]
+      apps = ["SSH"]
+      action = "permit"
+      disable             = false
+      labels = {
+        "Application" : "SSH"
+      }
       apps = ["SSH"]
       action = "permit"
     }
@@ -91,6 +136,250 @@ resource "psm_rules" "ApplicationA_Stack" {
 ```
 
 Currently there is no ability to add individual protocol/port entries (watch this space) as well as ability to define custom application definitions. 
+
+
+### Syslog Export
+
+PSM can create Syslog Export Targets, so the DSM will be able to send telemetry data directly to up to four external receivers
+Supported formats are: "syslog-rfc5424" and "syslog-bsd".
+Filters can be applied to limit the applied action on sessions, supported filters: all, allow, deny
+
+
+```
+resource "psm_syslog_export_policy" "policy01" {
+  name   = "policy01"
+  format = "syslog-rfc5424" //syslog-rfc5424, syslog-bsd
+  filter = ["deny"]         //all, allow, deny
+
+  syslogconfig {
+    facility         = "user"
+    disable_batching = false //true, false
+  }
+
+  psm_target {
+    enable = false
+  }
+
+  targets {
+    destination = "1.1.1.1"
+    transport   = "udp/514"
+  }
+
+  targets {
+    destination = "2.2.2.2"
+    transport   = "udp/514"
+  }
+
+  targets {
+    destination = "3.3.3.3"
+    transport   = "udp/514"
+  }
+
+  targets {
+    destination = "4.4.4.4"
+    transport   = "udp/514"
+  }
+}  
+```
+
+Binding the export policy is currently done manually via the DSS menu on PSM.
+
+### Apps
+
+Apps can be used inside Security Policies for easier handling. They can be nested up to five levels. 
+They can be built simply based on tcp / udp ports:
+
+```
+resource "psm_app" "app" {      
+  display_name = "example_app"      
+  spec {      
+    proto_ports {      
+      protocol = "tcp"      
+      ports    = "8080,9090"      
+    }     
+  }      
+}    
+```
+
+Or more complex ones including other apps as nested objects:
+
+```
+resource "psm_app" "app" {
+  display_name = "example_app"
+  spec {
+    proto_ports {
+      protocol = "tcp"
+      ports    = "7080,8080,8090-8092"
+    }
+    proto_ports {
+      protocol = "udp"
+      ports    = "5600-5800"
+    }
+    apps    = ["IMAP", "IMAPS"]
+  }
+}
+
+```
+ALGs (Application Layer Gateway) can be used to define Applications beside L3 / L4 based information
+
+```
+resource "psm_app" "dns_alg" {
+  display_name = "dns_alg_test"
+  spec {
+    proto_ports {
+      protocol = "udp"
+      ports    = "53,5353"
+    }
+    alg {
+      type = "dns"
+      dns {
+        drop_multi_question_packets    = true
+        drop_long_label_packets        = true
+        drop_large_domain_name_packets = false
+        max_message_length             = 512
+      }
+    }
+  }
+}
+
+resource "psm_app" "icmp_alg" {
+  display_name = "icmp_alg_test"
+  spec {
+    alg {
+      type = "icmp"
+      icmp {
+        type = "8"
+        code = "0"
+      }
+    }
+  }
+}
+
+resource "psm_app" "ftp_alg" {
+  display_name = "ftp_alg_test"
+  spec {
+    proto_ports {
+      protocol = "tcp"
+      ports    = "21"
+    }
+    alg {
+      type = "ftp"
+      ftp {
+        allow_mismatch_ip_address = true
+      }
+    }
+  }
+}
+
+resource "psm_app" "sunrpc_alg" {
+  display_name = "sunrpc_alg_test"
+  spec {
+    proto_ports {
+      protocol = "tcp"
+      ports    = "111"
+    }
+    timeout = "1h30m"
+    alg {
+      type = "sunrpc"
+      sunrpc {
+        program_id = "10024"
+      }
+    }
+  }
+}
+
+resource "psm_app" "msrpc_alg" {
+  display_name = "msrpc_alg_test"
+  spec {
+    proto_ports {
+      protocol = "tcp"
+      ports    = "135"
+    }
+    timeout = "1h30m"
+    alg {
+      type = "msrpc"
+      msrpc {
+        program_uuid = "a4f1db00-ca47-1067-b31f-00dd010662da"
+      }
+    }
+  }
+}
+
+resource "psm_app" "tftp_alg" {
+  display_name = "alg_tftp"
+  spec {
+    proto_ports {
+      protocol = "udp"
+      ports    = "69"
+    }
+    alg {
+      type = "tftp"
+    }
+  }
+}
+
+resource "psm_app" "rtsp_alg" {
+  display_name = "alg_rtsp"
+  spec {
+    proto_ports {
+      protocol = "tcp"
+      ports    = "554"
+    }
+    alg {
+      type = "rtsp"
+    }
+  }
+}
+```
+
+### Orchestrator / Hypervisor Integration
+
+Building and working with Workload Groups in Security Policies relies on Workload Objects, which are basically VM Tags extracted from the vSphere environment.
+A Read-Only user is needed for that.
+
+To monitor only specific Data Centers inside the vSphere environment, namespaces can be configured optionally (default "all_namespaces")
+
+Currently supported Hypervisors: vSphere 6.7, 7 and 8.
+
+
+```
+resource "psm_orchestrator" "vsphere01" {
+  type      = "vcenter"
+  name      = "vcenter01"
+  uri       = "vcenter01.domain.name"
+  auth_type = "username-password"
+  username  = "psm@domain.name"
+  password  = "Pensando0$!"
+
+  namespaces {
+    name = "dc01"
+  }
+
+  namespaces {
+    name = "dc02"
+  }
+}
+```
+
+
+### IPFIX Export
+
+PSM can create IPFIX Export Targets, so the DSM will be able to send telemetry data directly to external receivers
+
+```
+resource "psm_flow_export_policy" "ipfix" {
+  name     = "IPFIXv2"
+  interval = "10s"
+  format   = "ipfix"
+
+  target {
+    destination = "1.1.1.1"
+    transport   = "udp/9995"
+  }
+}
+```
+
+Binding the export policy is currently done manually via the DSS menu on PSM.
 
 ### Advanced usage 
 

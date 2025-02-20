@@ -18,6 +18,7 @@ func resourceVRF() *schema.Resource {
 		CreateContext: resourceVRFCreate,
 		ReadContext:   resourceVRFRead,
 		DeleteContext: resourceVRFDelete,
+		UpdateContext: resourceVRFUpdate,
 		Schema: map[string]*schema.Schema{
 			"name": {
 				Type:     schema.TypeString,
@@ -27,10 +28,22 @@ func resourceVRF() *schema.Resource {
 			"ingress_security_policy": {
 				Type:     schema.TypeString,
 				Optional: true,
+				ForceNew: false,
 			},
 			"egress_security_policy": {
 				Type:     schema.TypeString,
 				Optional: true,
+				ForceNew: false,
+			},
+			"connection_tracking_mode": {
+				Type:     schema.TypeString,
+				Optional: true,
+				ForceNew: false,
+			},
+			"allow_session_reuse": {
+				Type:     schema.TypeString,
+				Optional: true,
+				ForceNew: false,
 			},
 		},
 	}
@@ -65,6 +78,8 @@ type VRF struct {
 		IpsecPolicy                                           []interface{} `json:"ipsec-policy"`
 		SelectCPS                                             int           `json:"selectCPS"`
 		SelectSessions                                        int           `json:"selectSessions"`
+		ConnectionTracking                                    string        `json:"connection-tracking-mode"`
+		AllowSessionReuse                                     string        `json:"allow-session-reuse"`
 	} `json:"spec"`
 }
 
@@ -76,6 +91,8 @@ func resourceVRFCreate(ctx context.Context, d *schema.ResourceData, m interface{
 	vrf.Meta.Name = d.Get("name").(string)
 	vrf.Meta.Tenant = "default"
 	vrf.Spec.Type = "unknown"
+	vrf.Spec.ConnectionTracking = d.Get("connection_tracking_mode").(string)
+	vrf.Spec.AllowSessionReuse = d.Get("allow_session_reuse").(string)
 	vrfName := d.Get("name").(string)
 	if v, ok := d.GetOk("ingress_security_policy"); ok {
 		vrf.Spec.IngressSecurityPolicy = []interface{}{v.(string)}
@@ -207,4 +224,72 @@ func resourceVRFDelete(ctx context.Context, d *schema.ResourceData, m interface{
 	d.SetId("")
 
 	return nil
+}
+
+func resourceVRFUpdate(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
+	config := m.(*Config)
+	client := config.Client()
+
+	vrf := &VRF{}
+	vrf.Meta.Name = d.Get("name").(string)
+	vrf.Meta.Tenant = "default"
+	vrf.Spec.Type = "unknown"
+	vrf.Spec.ConnectionTracking = d.Get("connection_tracking_mode").(string)
+	vrf.Spec.AllowSessionReuse = d.Get("allow_session_reuse").(string)
+	vrfName := d.Get("name").(string)
+	if v, ok := d.GetOk("ingress_security_policy"); ok {
+		vrf.Spec.IngressSecurityPolicy = []interface{}{v.(string)}
+	}
+	if v, ok := d.GetOk("egress_security_policy"); ok {
+		vrf.Spec.EgressSecurityPolicy = []interface{}{v.(string)}
+	}
+	if vrfName == "default" {
+		d.SetId("default")
+		return nil
+	}
+
+	jsonBytes, err := json.Marshal(vrf)
+	if err != nil {
+		log.Printf("[ERROR] Error marshalling VRF: %s", err)
+		return diag.FromErr(err)
+	}
+
+	log.Printf("[DEBUG] Updating VRF with name: %s", vrf.Meta.Name)
+
+	req, err := http.NewRequestWithContext(ctx, "PUT", config.Server+"/configs/network/v1/tenant/default/virtualrouters/"+vrf.Meta.Name, bytes.NewBuffer(jsonBytes))
+	if err != nil {
+		return diag.FromErr(err)
+	}
+
+	req.AddCookie(&http.Cookie{Name: "sid", Value: config.SID})
+
+	resp, err := client.Do(req)
+	if err != nil {
+		log.Printf("[ERROR] Error when updating VRF: %s", err)
+		return diag.FromErr(err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := ioutil.ReadAll(resp.Body)
+		errMsg := fmt.Sprintf("failed to update VRF: HTTP %d %s: %s", resp.StatusCode, resp.Status, bodyBytes)
+		return diag.Diagnostics{
+			{
+				Severity: diag.Error,
+				Summary:  "VRF update failed",
+				Detail:   errMsg,
+			},
+		}
+	}
+
+	responseBody := &VRF{}
+	if err := json.NewDecoder(resp.Body).Decode(responseBody); err != nil {
+		return diag.FromErr(err)
+	}
+
+	d.SetId(responseBody.Meta.UUID.(string))
+
+	log.Printf("[DEBUG] VRF updated with UUID: %s", responseBody.Meta.UUID.(string))
+
+	return append(diag.Diagnostics{}, resourceVRFRead(ctx, d, m)...)
 }

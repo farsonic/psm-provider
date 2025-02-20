@@ -1,0 +1,51 @@
+tunnel := &Tunnel{
+	Kind:       nil,
+	APIVersion: nil,
+	Meta: TunnelMeta{
+		Name:            d.Get("name").(string),
+		Tenant:          d.Get("tenant").(string),
+		Namespace:       nil,
+		GenerationID:    nil,
+		ResourceVersion: nil,
+		UUID:            nil,
+		Labels:          nil,
+		SelfLink:        nil,
+		DisplayName:     nil,
+	},
+	Spec: TunnelSpec{
+		//PolicyDistributionTargets: convertToStringSlice(d.Get("policy_distribution_target").([]interface{})),
+		PolicyDistributionTargets: []string{d.Get("policy_distribution_targets").(string)},
+		TunnelEndpoints: []TunnelEndpoint{
+			{
+				InterfaceName: d.Get("interface_name").(string),
+				DSE:           d.Get("dse").(string),
+				IKEVersion:    d.Get("ike_version").(string),
+				IKESA: &IKESA{
+					IKEV1Mode:            d.Get("ikev1_mode").(string),
+					EncryptionAlgorithms: convertToStringSlice(d.Get("encryption_algorithms").([]interface{})),
+					HashAlgorithms:       convertToStringSlice(d.Get("hash_algorithms").([]interface{})),
+					DHGroups:             convertToStringSlice(d.Get("dh_groups").([]interface{})),
+					RekeyLifetime:        d.Get("rekey_lifetime").(string),
+					PreSharedKey:         d.Get("pre_shared_key").(string),
+					ReauthLifetime:       d.Get("reauth_lifetime").(string),
+					DPDDelay:             d.Get("dpd_delay").(string),
+					IKEV1DPDTimeout:      d.Get("ikev1_dpd_timeout").(string),
+					IKEInitiator:         d.Get("ikev1_mode").(bool),
+				},
+				IPSECSA: &IPSECSA{
+					EncryptionAlgorithms: convertToStringSlice(d.Get("encryption_algorithms").([]interface{})),
+					DHGroups:             convertToStringSlice(d.Get("dh_groups").([]interface{})),
+					RekeyLifetime:        d.Get("rekey_lifetime").(string),
+				},
+				LocalIdentifier: Identifier{
+					Type:  d.Get("type").(string),
+					Value: d.Get("value").(string),
+				},
+				RemoteIdentifier: Identifier{
+					Type:  d.Get("type").(string),
+					Value: d.Get("value").(string),
+				},
+			},
+		},
+	},
+}

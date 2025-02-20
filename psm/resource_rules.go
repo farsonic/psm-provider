@@ -13,6 +13,27 @@ import (
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
+/*
+func convertToStringSlice(input []interface{}) []string {
+	result := make([]string, len(input))
+	for i, v := range input {
+		result[i] = v.(string)
+	}
+	return result
+}
+*/
+
+func validateAction(val interface{}, key string) (warns []string, errs []error) {
+	v := val.(string)
+	switch v {
+	case "permit", "deny":
+		// valid
+	default:
+		errs = append(errs, fmt.Errorf("%q must be either 'allow' or 'deny', got: %s", key, v))
+	}
+	return
+}
+
 // Define the Terraform resource schema for security policy. The schema defines how the local state is stored
 // and can be populated at runtime based on the response from the PSM server.
 func resourceRules() *schema.Resource {
@@ -100,41 +121,71 @@ func resourceRules() *schema.Resource {
 									// Define the schema for a single rule here
 									"name": {
 										Type:     schema.TypeString,
-										Computed: true,
+										Optional: true,
+										ForceNew: false,
+									},
+									"labels": {
+										Type:     schema.TypeMap,
+										Optional: true,
+										Elem:     &schema.Schema{Type: schema.TypeString},
 									},
 									"action": {
 										Type:     schema.TypeString,
-										Computed: true,
+										Required: true,
+										ForceNew: false,
 									},
 									"description": {
 										Type:     schema.TypeString,
 										Optional: true,
-										ForceNew: true,
+										ForceNew: false,
 									},
 									"apps": {
 										Type:     schema.TypeList,
 										Elem:     &schema.Schema{Type: schema.TypeString},
-										Computed: true,
+										Optional: true,
+										ForceNew: false,
+									},
+									"disable": {
+										Type:     schema.TypeBool,
+										Optional: true,
+										ForceNew: false,
+										Default:  false,
 									},
 									"from_ip_collections": {
 										Type:     schema.TypeList,
 										Elem:     &schema.Schema{Type: schema.TypeString},
-										Computed: true,
+										Optional: true,
+										ForceNew: false,
 									},
 									"to_ip_collections": {
 										Type:     schema.TypeList,
 										Elem:     &schema.Schema{Type: schema.TypeString},
-										Computed: true,
+										Optional: true,
+										ForceNew: false,
 									},
 									"from_ip_addresses": {
 										Type:     schema.TypeList,
 										Elem:     &schema.Schema{Type: schema.TypeString},
-										Computed: true,
+										Optional: true,
+										ForceNew: false,
 									},
 									"to_ip_addresses": {
 										Type:     schema.TypeList,
 										Elem:     &schema.Schema{Type: schema.TypeString},
-										Computed: true,
+										Optional: true,
+										ForceNew: false,
+									},
+									"from_workloadgroups": {
+										Type:     schema.TypeList,
+										Elem:     &schema.Schema{Type: schema.TypeString},
+										Optional: true,
+										ForceNew: false,
+									},
+									"to_workloadgroups": {
+										Type:     schema.TypeList,
+										Elem:     &schema.Schema{Type: schema.TypeString},
+										Optional: true,
+										ForceNew: false,
 									},
 								},
 							},
@@ -157,18 +208,23 @@ func resourceRules() *schema.Resource {
 			"rule": {
 				Type:     schema.TypeList,
 				Optional: true,
-				ForceNew: true,
+				ForceNew: false,
 				Elem: &schema.Resource{
 					Schema: map[string]*schema.Schema{
 						"rule_name": {
 							Type:     schema.TypeString,
 							Optional: true,
-							ForceNew: true,
+							ForceNew: false,
 						},
 						"description": {
 							Type:     schema.TypeString,
 							Optional: true,
-							ForceNew: true,
+							ForceNew: false,
+						},
+						"labels": {
+							Type:     schema.TypeMap,
+							Optional: true,
+							Elem:     &schema.Schema{Type: schema.TypeString},
 						},
 						"from_ip_collections": {
 							Type:     schema.TypeList,
@@ -190,17 +246,33 @@ func resourceRules() *schema.Resource {
 							Elem:     &schema.Schema{Type: schema.TypeString},
 							Optional: true,
 						},
+						"from_workloadgroups": {
+							Type:     schema.TypeList,
+							Elem:     &schema.Schema{Type: schema.TypeString},
+							Optional: true,
+						},
+						"to_workloadgroups": {
+							Type:     schema.TypeList,
+							Elem:     &schema.Schema{Type: schema.TypeString},
+							Optional: true,
+						},
 						"apps": {
 							Type:     schema.TypeList,
 							Elem:     &schema.Schema{Type: schema.TypeString},
 							Optional: true,
-							ForceNew: true,
+							ForceNew: false,
 						},
-						"action": {
-							Type:     schema.TypeString,
+            "action": {
+							Type:         schema.TypeString,
+							Required:     true,
+							ForceNew:     false,
+							ValidateFunc: validateAction,
+						},
+						"disable": {
+							Type:     schema.TypeBool,
 							Optional: true,
-							//ForceNew:     true,
-							//ValidateFunc: validateAction,
+							ForceNew: false,
+							Default:  false,
 						},
 					},
 				},
@@ -237,15 +309,18 @@ type Spec struct {
 }
 
 type Rule struct {
-	Apps              []string    `json:"apps"`
-	Action            string      `json:"action"`
-	Description       string      `json:"description"`
-	Name              string      `json:"name"`
-	Disable           interface{} `json:"disable"`
-	FromIPAddresses   []string    `json:"from-ip-addresses"`
-	ToIPAddresses     []string    `json:"to-ip-addresses"`
-	FromIPCollections []string    `json:"from-ipcollections"`
-	ToIPCollections   []string    `json:"to-ipcollections"`
+	Apps              []string          `json:"apps"`
+	Action            string            `json:"action"`
+	Description       string            `json:"description"`
+	Name              string            `json:"name"`
+	Labels            map[string]string `json:"labels,omitempty"`
+	Disable           bool              `json:"disable"`
+	FromIPAddresses   []string          `json:"from-ip-addresses"`
+	ToIPAddresses     []string          `json:"to-ip-addresses"`
+	FromIPCollections []string          `json:"from-ipcollections"`
+	ToIPCollections   []string          `json:"to-ipcollections"`
+	FromWorkloadGroup []string          `json:"from-workload-groups"`
+	ToWorkloadGroup   []string          `json:"to-workload-groups"`
 }
 
 type Status struct {
@@ -314,11 +389,23 @@ func resourceRulesCreate(ctx context.Context, d *schema.ResourceData, m interfac
 				Action:            ruleMap["action"].(string),
 				Description:       ruleMap["description"].(string),
 				Name:              ruleMap["rule_name"].(string),
+				Disable:           ruleMap["disable"].(bool),
 				FromIPAddresses:   convertToStringSlice(ruleMap["from_ip_addresses"].([]interface{})),
 				ToIPAddresses:     convertToStringSlice(ruleMap["to_ip_addresses"].([]interface{})),
 				FromIPCollections: convertToStringSlice(ruleMap["from_ip_collections"].([]interface{})),
 				ToIPCollections:   convertToStringSlice(ruleMap["to_ip_collections"].([]interface{})),
+				FromWorkloadGroup: convertToStringSlice(ruleMap["from_workloadgroups"].([]interface{})),
+				ToWorkloadGroup:   convertToStringSlice(ruleMap["to_workloadgroups"].([]interface{})),
 			}
+
+			if v, ok := ruleMap["labels"].(map[string]interface{}); ok {
+				labels := make(map[string]string)
+				for k, v := range v {
+					labels[k] = v.(string)
+				}
+				rule.Labels = labels
+			}
+
 			policy.Spec.Rules = append(policy.Spec.Rules, rule)
 		}
 	}
@@ -371,10 +458,13 @@ func resourceRulesCreate(ctx context.Context, d *schema.ResourceData, m interfac
 			"action":              rule.Action,
 			"description":         rule.Description,
 			"apps":                rule.Apps,
+			"disable":             rule.Disable,
 			"from_ip_collections": rule.FromIPCollections,
 			"to_ip_collections":   rule.ToIPCollections,
 			"from_ip_addresses":   rule.FromIPAddresses,
 			"to_ip_addresses":     rule.ToIPAddresses,
+			"from_workloadgroups": rule.FromWorkloadGroup,
+			"to_workloadgroups":   rule.ToWorkloadGroup,
 		}
 	}
 
@@ -449,10 +539,13 @@ func resourceRulesRead(ctx context.Context, d *schema.ResourceData, m interface{
 			"action":              rule.Action,
 			"description":         rule.Description,
 			"apps":                rule.Apps,
+			"disable":             rule.Disable,
 			"from_ip_collections": rule.FromIPCollections,
 			"to_ip_collections":   rule.ToIPCollections,
 			"from_ip_addresses":   rule.FromIPAddresses,
 			"to_ip_addresses":     rule.ToIPAddresses,
+			"from_workloadgroups": rule.FromWorkloadGroup,
+			"to_workloadgroups":   rule.ToWorkloadGroup,
 		}
 	}
 
@@ -521,11 +614,23 @@ func resourceRulesUpdate(ctx context.Context, d *schema.ResourceData, m interfac
 				Action:            ruleMap["action"].(string),
 				Description:       ruleMap["description"].(string),
 				Name:              ruleMap["rule_name"].(string),
+				Disable:           ruleMap["disable"].(bool),
 				FromIPAddresses:   convertToStringSlice(ruleMap["from_ip_addresses"].([]interface{})),
 				ToIPAddresses:     convertToStringSlice(ruleMap["to_ip_addresses"].([]interface{})),
 				FromIPCollections: convertToStringSlice(ruleMap["from_ip_collections"].([]interface{})),
 				ToIPCollections:   convertToStringSlice(ruleMap["to_ip_collections"].([]interface{})),
+				FromWorkloadGroup: convertToStringSlice(ruleMap["from_workloadgroups"].([]interface{})),
+				ToWorkloadGroup:   convertToStringSlice(ruleMap["to_workloadgroups"].([]interface{})),
 			}
+
+			if v, ok := ruleMap["labels"].(map[string]interface{}); ok {
+				labels := make(map[string]string)
+				for k, v := range v {
+					labels[k] = v.(string)
+				}
+				rule.Labels = labels
+			}
+
 			policy.Spec.Rules = append(policy.Spec.Rules, rule)
 		}
 	}
@@ -578,10 +683,13 @@ func resourceRulesUpdate(ctx context.Context, d *schema.ResourceData, m interfac
 			"action":              rule.Action,
 			"description":         rule.Description,
 			"apps":                rule.Apps,
+			"disable":             rule.Disable,
 			"from_ip_collections": rule.FromIPCollections,
 			"to_ip_collections":   rule.ToIPCollections,
 			"from_ip_addresses":   rule.FromIPAddresses,
 			"to_ip_addresses":     rule.ToIPAddresses,
+			"from_workloadgroups": rule.FromWorkloadGroup,
+			"to_workloadgroups":   rule.ToWorkloadGroup,
 		}
 	}
 
