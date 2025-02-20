@@ -130,8 +130,6 @@ resource "psm_rules" "ApplicationA_Stack" {
       labels = {
         "Application" : "SSH"
       }
-      apps = ["SSH"]
-      action = "permit"
     }
 }
 ```
