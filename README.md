@@ -120,8 +120,8 @@ resource "psm_rules" "ApplicationA_Stack" {
       description = "This rule allows SSH traffic from public IPs"
       from_ip_addresses   = ["10.9.0.0/24"]
       to_ip_addresses     = ["10.10.0.0/23", "10.99.1.1/32"]
-      from_ip_collections = ["network2","network1"]
-      to_ip_collections   = ["network4"]
+      from_ip_collections = ["DatabaseServer01","DatabaseServer02"]
+      to_ip_collections   = ["DatabaseServer01"]
       from_workloadgroups = ["WorkloadGroup1","WorkloadGroup2"]
       to_workloadgroups   = ["WorkloadGroup3","WorkloadGroup4"]
       apps = ["SSH"]
