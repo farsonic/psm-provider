@@ -76,7 +76,6 @@ resource "psm_network" "network" {
   service_bypass           = true
   virtual_router           = "CustomerABC"
   tenant   = "default" 
-  vlan_id  = 123
 }
 ```
 
