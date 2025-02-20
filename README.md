@@ -1,6 +1,6 @@
 # psm-provider
 
-This project is maintained on a best effort basis. I am not actively working on it. From time to time I will check for new pull requests and issues however. 
+This project is maintained on a best effort basis. I am not actively working on it. From time to time I will check for new pull requests and issues however. This code is provided as a best effort project and should be tested in a lab environment first. 
 
 ## Build Process 
 Currently the provider is distributed and built from Github. Build the code locally and then reference this provider. 
