@@ -6,10 +6,8 @@ Currently the provider is distributed and built from Github. Build the code loca
 ```
 sudo apt update
 sudo apt install golang git
-
 git clone git clone https://github.com/farsonic/psm-provider.git
 cd psm-provider
-go mod tidy
 go mod tidy
 make install 
 ```
