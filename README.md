@@ -1,34 +1,27 @@
 # psm-provider
 
 ## Build Process 
+Currently the provider is distributed and built from Github. Build the code locally and then reference this provider. 
 
 ```
+sudo apt update
+sudo apt install golang git
+
 git clone git clone https://github.com/farsonic/psm-provider.git
 cd psm-provider
-make build
+go mod tidy
+go mod tidy
 make install 
 ```
 
-## Installation
-Currently the code is installed directly from Github where there is a Main repo and a Dev repository. Current expections are that the provider is being installed using a Linux or WSL based platform which it has been tested against. You will need to have git tools installed and a functional build system. 
+The code will now be placed into ~/.terraform.d/plugins/local/provider/psm/X.X.X/linux_amd64 where is the version number of the build. This should be referenced as local/provider/psm. Once you install the provider it will be hosted locally with the current **Hostname = local** and the **Namespace = provider**. The Name of the provider is **PSM**.
 
-```
-git clone https://github.com/farsonic/psm-provider.git 
-cd psm-provider
-go get google.golang.org/genproto/
-go mod tidy
-make
-```
-
-Once you install the provider it will be hosted locally with the current **Hostname = local** and the **Namespace = provider**. The Name of the provider is **PSM**.
-
-Within your Terraform infrastructure file (ie main.tf) specify the provider with the following syntax. 
+Within your Terraform infrastructure file (ie main.tf) specify the provider with the following syntax. You can specify the version if wanted but it will always use the latest. If you do specify the version you will need to use the -upgrade switch to force an upgrade. 
 
 ```
 terraform { 
   required_providers {
    psm = { 
-      version = "0.2.1" 
       source = "local/provider/psm"
   }
  }
