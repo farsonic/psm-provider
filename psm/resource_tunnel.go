@@ -422,6 +422,7 @@ func getBool(data map[string]interface{}, key string) bool {
 	return false
 }
 
+/*
 func convertToStringSlice(input interface{}) []string {
 	var result []string
 	inputSlice, ok := input.([]interface{})
@@ -439,3 +440,4 @@ func convertToStringSlice(input interface{}) []string {
 	}
 	return result
 }
+*/
