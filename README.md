@@ -17,6 +17,17 @@ The code will now be placed into ~/.terraform.d/plugins/local/provider/psm/X.X.X
 Within your Terraform infrastructure file (ie main.tf) specify the provider with the following syntax. You can specify the version if wanted but it will always use the latest. If you do specify the version you will need to use the -upgrade switch to force an upgrade. 
 
 ```
+git clone https://github.com/farsonic/psm-provider.git 
+cd psm-provider
+make
+```
+
+Once you install the provider it will be hosted locally with the current **Hostname = local** and the **Namespace = provider**. The Name of the provider is **PSM**.
+
+Within your Terraform infrastructure file (ie main.tf) specify the provider with the following syntax. 
+
+
+```
 terraform { 
   required_providers {
    psm = { 
@@ -62,6 +73,8 @@ resource "psm_network" "network" {
   allow_session_reuse      = "disable"
   service_bypass           = true
   virtual_router           = "CustomerABC"
+  tenant   = "default" 
+  vlan_id  = 123
 }
 ```
 
@@ -89,6 +102,7 @@ resource "psm_ipcollection" "db02" {
 resource "psm_ipcollection" "dbsrvs" {
   name     = "DatabaseServers"
   ip_collections = ["DatabaseServer01", "DatabaseServer02"]
+  addresses = ["10.10.10.0/24"] 
 }
 ```
 
@@ -115,6 +129,8 @@ resource "psm_rules" "ApplicationA_Stack" {
       labels = {
         "Application" : "SSH"
       }
+      apps = ["SSH"]
+      action = "permit"
     }
 }
 ```
@@ -364,7 +380,6 @@ resource "psm_flow_export_policy" "ipfix" {
 ```
 
 Binding the export policy is currently done manually via the DSS menu on PSM.
-
 
 ### Advanced usage 
 
