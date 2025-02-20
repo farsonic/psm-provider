@@ -1,3 +1,5 @@
+Work migrated to https://github.com/Max1211/terraform-provider-psm moving forward. I started this provider and it has now taken a great life of its own and @max1211 has done a stella job updating this. 
+
 # psm-provider
 
 This project is maintained on a best effort basis. I am not actively working on it. From time to time I will check for new pull requests and issues however. This code is provided as a best effort project and should be tested in a lab environment first. 
